@@ -49,7 +49,7 @@ class Protocol:
         return {
             "type": "join_response",
             "status": status,
-            "id" : _id
+            "id": _id
         }
 
     @staticmethod
@@ -78,7 +78,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_cards_success(sock,cards):
+    def validate_cards_success(sock, cards):
         return {
             "type": "validate_cards_success",
             "cards": cards
@@ -123,4 +123,52 @@ class Protocol:
             "type": "shuffle_response",
             "deck": deck,
             "id": _id
+        }
+
+    @staticmethod
+    @send_message
+    def validate_decks(sock, decks):
+        return {
+            "type": "validate_decks",
+            "decks": decks
+        }
+
+    @staticmethod
+    @send_message
+    def validate_decks_success(sock, decks):
+        return {
+            "type": "validate_decks_success",
+            "decks": decks
+        }
+
+    @staticmethod
+    @send_message
+    def choose_winner(sock, deck, cards):
+        return {
+            "type": "choose_winner",
+            "deck": deck,
+            "cards": cards
+        }
+
+    @staticmethod
+    @send_message
+    def choose_winner_response(conn, winner):
+        return {
+            "type": "choose_winner_response",
+            "winner": winner
+        }
+
+    @staticmethod
+    @send_message
+    def announce_winner(conn, winner):
+        return {
+            "type": "announce_winner",
+            "winner": winner
+        }
+
+    @staticmethod
+    @send_message
+    def winner_decision_failed(conn):
+        return {
+            "type": "winner_decision_failed",
         }

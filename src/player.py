@@ -55,6 +55,20 @@ class Player:
                 self.validate_cards(conn, data)
             elif data["type"] == "shuffle":
                 self.shuffle(conn, data)
+            elif data["type"] == "validate_decks":
+                self.validate_decks(conn, data)
+            elif data["type"] == "playing_area_closing":
+                self.logger.info(f"Playing area closed")
+                self.close()
+            elif data["type"] == "choose_winner":
+                self.choose_winner(conn, data)
+            elif data["type"] == "announce_winner":
+                self.logger.info(f"Winner: {data['winner']}")
+            elif data["type"] == "winner_decision_failed":
+                self.logger.info(f"Winner decision failed")
+                self.close()
+            else:
+                self.logger.info(f"Unknown message type: {data['type']}")
 
         else:
             self.logger.info("Server disconnected")
@@ -81,7 +95,6 @@ class Player:
         Protocol.shuffle_response(conn, shuffled_deck, self.id)
 
     def validate_cards(self, conn, data):
-        self.logger.info(f"Validating cards")
         for card in data["cards"]:
             self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(self.deck_size, card):
@@ -90,3 +103,14 @@ class Player:
         else:
             self.logger.info(f"Valid cards")
             Protocol.validate_cards_success(conn, data["cards"])
+
+    def validate_decks(self, conn, data):
+        # TODO: Validate decks
+        self.logger.info(f"Validating decks")
+        Protocol.validate_decks_success(conn, data["decks"])
+
+    def choose_winner(self, conn, data):
+        self.logger.info(f"Choosing winner")
+        winner = Game.winner(data["deck"], data["cards"])
+        self.logger.info(f"I decided that the winner is {winner}")
+        Protocol.choose_winner_response(conn, winner)

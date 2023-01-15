@@ -61,6 +61,20 @@ class Caller:
                 self.validate_cards(conn, data)
             elif data["type"] == "generate_deck_request":
                 self.generate_deck()
+            elif data["type"] == "playing_area_closing":
+                self.close()
+
+            elif data["type"] == "validate_decks":
+                self.validate_decks(conn, data)
+            elif data["type"] == "choose_winner":
+                self.choose_winner(conn, data)
+            elif data["type"] == "announce_winner":
+                self.logger.info(f"Winner: {data['winner']}")
+            elif data["type"] == "winner_decision_failed":
+                self.logger.info(f"Winner decision failed")
+                self.close()
+            else:
+                self.logger.info(f"Unknown message type: {data['type']}")
         else:
             self.logger.info(f"Server closed connection")
             self.close()
@@ -73,9 +87,8 @@ class Caller:
             self.close()
 
     def validate_cards(self, conn, data):
-        self.logger.info(f"Validating cards")
         for card in data["cards"]:
-            self.logger.info(f"Card: {card}")
+            self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(DEFAULT_SIZE, card):
                 self.logger.info(f"Invalid card")
                 Protocol.validate_cards_error(self.sock, "Invalid Card", card)
@@ -95,3 +108,14 @@ class Caller:
         self.logger.info(f"Generating deck")
         deck = Game.generate_deck(DEFAULT_SIZE)
         Protocol.generate_deck_response(self.sock, deck)
+
+    def validate_decks(self, conn, data):
+        # TODO: Validate decks
+        self.logger.info(f"Validating decks")
+        Protocol.validate_decks_success(conn, data["decks"])
+
+    def choose_winner(self, conn, data):
+        self.logger.info(f"Choose winner")
+        winner = Game.winner(data["deck"], data["cards"])
+        self.logger.info(f"I decided that the winner is {winner}")
+        Protocol.choose_winner_response(conn, winner)

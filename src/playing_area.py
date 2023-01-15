@@ -25,9 +25,11 @@ class PlayingArea:
         self.caller = None
         self.players: list[Player] = []
         self.validated_cards = defaultdict(list)
+        self.validated_decks = defaultdict(list)
         self.game_status: GameStatus = GameStatus.NOT_STARTED
         self.cards = {}
         self.decks = []
+        self.winner_choices = []
         self.logger.info(f"Playing Area started")
 
     def accept(self, sock):
@@ -60,13 +62,23 @@ class PlayingArea:
                 self.cards_validated(conn, data)
             elif data["type"] == "validate_cards_error":
                 self.logger.info(f"Cards not validated")
+                for player in self.players:
+                    Protocol.playing_area_closing(player.sock)
+                Protocol.playing_area_closing(self.caller)
             elif data["type"] == "generate_deck_response":
-                self.decks.append((conn, data["deck"]))
-                Protocol.shuffle_request(self.players[0].sock, data["deck"])
+                self.caller_deck(data)
             elif data["type"] == "shuffle_response":
-                self.handle_shuffle_response(conn, data)
+                self.handle_shuffle_response(data)
+            elif data["type"] == "validate_decks_success":
+                self.decks_validated(conn, data)
+            elif data["type"] == "choose_winner_response":
+                self.handle_choose_winner_response(data)
         else:
             self.handle_disconnect(conn)
+
+    def caller_deck(self, data):
+        self.decks.append((0, data["deck"]))
+        Protocol.shuffle_request(self.players[0].sock, data["deck"])
 
     def handle_disconnect(self, conn):
         self.sel.unregister(conn)
@@ -125,9 +137,39 @@ class PlayingArea:
             self.logger.info(f"All cards validated")
             Protocol.generate_deck_request(self.caller)
 
-    def handle_shuffle_response(self, conn, data):
-        self.decks.append((conn, data["deck"]))
+    def handle_shuffle_response(self, data):
+        self.decks.append((data["id"], data["deck"]))
         if len(self.decks) == len(self.players) + 1:
             self.logger.info(f"All decks shuffled")
+            Protocol.validate_decks(self.caller, self.decks)
+            for player in self.players:
+                Protocol.validate_decks(player.sock, self.decks)
         else:
             Protocol.shuffle_request(self.players[data["id"]].sock, data["deck"])
+
+    def decks_validated(self, conn, data):
+        self.validated_decks[conn] = data["decks"]
+
+        if len(self.validated_decks) == len(self.players) + 1:
+            self.logger.info(f"All decks validated")
+            Protocol.choose_winner(self.caller, self.decks[-1][1], self.cards)
+            for player in self.players:
+                Protocol.choose_winner(player.sock, self.decks[-1][1], self.cards)
+
+    def handle_choose_winner_response(self, data):
+        self.winner_choices.append(data["winner"])
+
+        if len(self.winner_choices) == len(self.players) + 1:
+            self.logger.info(f"All winners chosen")
+            if len(set(self.winner_choices)) == 1:
+                self.logger.info(f"All players chose the same winner")
+                self.logger.info(f"Winner is {self.winner_choices[0]}")
+                Protocol.announce_winner(self.caller, self.winner_choices[0])
+                for player in self.players:
+                    Protocol.announce_winner(player.sock, self.winner_choices[0])
+            else:
+                self.logger.info(f"Players chose different winners")
+                self.logger.info(f"Something went wrong")
+                Protocol.winner_decision_failed(self.caller)
+                for player in self.players:
+                    Protocol.winner_decision_failed(player.sock)
