@@ -44,3 +44,10 @@ class Protocol:
             "type": "join_response",
             "status": status
         }
+
+    @staticmethod
+    @send_message
+    def start_game(sock):
+        return {
+            "type": "start_game"
+        }

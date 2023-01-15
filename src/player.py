@@ -50,3 +50,6 @@ class Player:
                 else:
                     self.logger.info(f"Failed to join")
                     self.close()
+
+            if data["type"] == "start_game":
+                self.logger.info(f"Game started")

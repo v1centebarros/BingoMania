@@ -1,6 +1,9 @@
+import fcntl
 import json
+import os
 import selectors
 import socket
+import sys
 
 from src.logger import get_logger
 from src.protocol import Protocol
@@ -24,6 +27,10 @@ class Caller:
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()
+
+        orig_fl = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
+        fcntl.fcntl(sys.stdin, fcntl.F_SETFL, orig_fl | os.O_NONBLOCK)
+        self.sel.register(sys.stdin, selectors.EVENT_READ, self.keyboard_input)
 
     def loop(self):
         while True:
@@ -51,3 +58,11 @@ class Caller:
                 else:
                     self.logger.info(f"A caller already exists")
                     self.close()
+
+    def keyboard_input(self, stdin):
+        input_msg = stdin.read()
+
+        if input_msg.startswith("/start"):
+            Protocol.start_game(self.sock)
+        else:
+            print("Invalid command")
