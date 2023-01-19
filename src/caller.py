@@ -101,6 +101,9 @@ class Caller:
 
         if input_msg.startswith("/start"):
             Protocol.start_game(self.sock, DEFAULT_SIZE)
+
+        elif input_msg.startswith("/end"):
+            Protocol.close_game(self.sock)
         else:
             print("Invalid command")
 

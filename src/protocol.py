@@ -2,11 +2,11 @@ import json
 
 
 def send_message(func):
-    def wrapper(*args, **kwargs):
+    def wrapper(sock, *args, **kwargs):
         payload = func(*args, **kwargs)
         payload = json.dumps(payload)
         message = len(payload).to_bytes(4, 'big') + payload.encode('utf-8')
-        args[0].send(message)
+        sock.send(message)
         return message
 
     return wrapper
@@ -16,12 +16,12 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def playing_area_closing(sock):
+    def playing_area_closing():
         return {"type": "playing_area_closing"}
 
     @staticmethod
     @send_message
-    def join_caller_request(sock, name):
+    def join_caller_request(name):
         return {
             "type": "join_caller",
             "name": name
@@ -29,7 +29,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_caller_response(sock, status):
+    def join_caller_response(status):
         return {
             "type": "join_caller_response",
             "status": status
@@ -37,7 +37,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_request(sock, name):
+    def join_request(name):
         return {
             "type": "join_player",
             "name": name
@@ -45,7 +45,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_response(sock, status, _id):
+    def join_response(status, _id):
         return {
             "type": "join_response",
             "status": status,
@@ -54,7 +54,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def start_game(sock, size: int):
+    def start_game(size: int):
         return {
             "type": "start_game",
             "size": size
@@ -62,7 +62,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def send_card(sock, card):
+    def send_card(card):
         return {
             "type": "card",
             "card": card
@@ -70,7 +70,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_cards(sock, cards):
+    def validate_cards(cards):
         return {
             "type": "validate_cards",
             "cards": cards
@@ -78,7 +78,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_cards_success(sock, cards):
+    def validate_cards_success(cards):
         return {
             "type": "validate_cards_success",
             "cards": cards
@@ -86,7 +86,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_cards_error(sock, error, cheater):
+    def validate_cards_error(error, cheater):
         return {
             "type": "validate_cards_error",
             "error": error,
@@ -95,14 +95,14 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def generate_deck_request(sock):
+    def generate_deck_request():
         return {
             "type": "generate_deck_request",
         }
 
     @staticmethod
     @send_message
-    def generate_deck_response(sock, deck):
+    def generate_deck_response(deck):
         return {
             "type": "generate_deck_response",
             "deck": deck
@@ -110,7 +110,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def shuffle_request(sock, deck):
+    def shuffle_request(deck):
         return {
             "type": "shuffle",
             "deck": deck
@@ -118,7 +118,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def shuffle_response(sock, deck, _id):
+    def shuffle_response(deck, _id):
         return {
             "type": "shuffle_response",
             "deck": deck,
@@ -127,7 +127,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_decks(sock, decks):
+    def validate_decks(decks):
         return {
             "type": "validate_decks",
             "decks": decks
@@ -135,7 +135,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_decks_success(sock, decks):
+    def validate_decks_success(decks):
         return {
             "type": "validate_decks_success",
             "decks": decks
@@ -143,7 +143,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def choose_winner(sock, deck, cards):
+    def choose_winner(deck, cards):
         return {
             "type": "choose_winner",
             "deck": deck,
@@ -152,7 +152,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def choose_winner_response(conn, winner):
+    def choose_winner_response(winner):
         return {
             "type": "choose_winner_response",
             "winner": winner
@@ -160,7 +160,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def announce_winner(conn, winner):
+    def announce_winner(winner):
         return {
             "type": "announce_winner",
             "winner": winner
@@ -168,7 +168,14 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def winner_decision_failed(conn):
+    def winner_decision_failed():
         return {
             "type": "winner_decision_failed",
+        }
+
+    @staticmethod
+    @send_message
+    def close_game():
+        return {
+            "type": "close_game"
         }

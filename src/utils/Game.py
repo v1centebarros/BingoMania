@@ -23,9 +23,9 @@ class Game:
         return random.sample(deck, len(deck))
 
     @staticmethod
-    def validate_card(N: int, my_guess: list[int]) -> bool:
+    def validate_card(n: int, my_guess: list[int]) -> bool:
         """Check if the player submits a valid card."""
-        return len(my_guess) != N // 4 or len(set(my_guess)) != len(my_guess) or max(my_guess) > N or min(my_guess) < 1
+        return len(my_guess) != n // 4 or len(set(my_guess)) != len(my_guess) or max(my_guess) > n or min(my_guess) < 1
 
     @staticmethod
     def count_turns(deck: list[int], card: list[int]) -> int:

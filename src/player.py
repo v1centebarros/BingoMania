@@ -1,10 +1,16 @@
+import fcntl
 import json
+import os
 import selectors
 import socket
+import sys
 
+from src.utils.AES import AES
+from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.protocol import Protocol
 from src.utils.Game import Game
+from src.utils.types import Keys
 
 
 class Player:
@@ -13,11 +19,15 @@ class Player:
         self.host = host
         self.port = port
         self.name = name
+        # Start Player's Socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.sock, selectors.EVENT_READ, self.read)
         self.logger = get_logger(__name__)
         self.deck_size = -1
+        orig_fl = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
+        fcntl.fcntl(sys.stdin, fcntl.F_SETFL, orig_fl | os.O_NONBLOCK)
+        self.sel.register(sys.stdin, selectors.EVENT_READ, self.keyboard_input)
 
         try:
             self.sock.connect((self.host, self.port))
@@ -26,6 +36,9 @@ class Player:
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()
+
+        # Personal keys
+        self.keys = Keys(*RSA.generate_key_pair(), AES.generate_key())
 
     def loop(self):
         while True:
@@ -73,6 +86,14 @@ class Player:
         else:
             self.logger.info("Server disconnected")
             self.close()
+
+    def keyboard_input(self, stdin):
+        input_msg = stdin.read()
+
+        if input_msg.startswith("/log"):
+            self.logger.info(f"I want the log!")
+        else:
+            print("Invalid command")
 
     def join(self, data):
         if data["status"] == "ok":

@@ -52,27 +52,40 @@ class PlayingArea:
 
             if data["type"] == "join_player":
                 self.join_player(conn, data)
+
             elif data["type"] == "join_caller":
                 self.join_caller(conn, data)
+
             elif data["type"] == "start_game":
                 self.start_game(data)
+
             elif data["type"] == "card":
                 self.receive_card(conn, data)
+
             elif data["type"] == "validate_cards_success":
                 self.cards_validated(conn, data)
+
             elif data["type"] == "validate_cards_error":
                 self.logger.info(f"Cards not validated")
+                # FIXME: Isto não funciona testar quando o validar estiver implementado
                 for player in self.players:
                     Protocol.playing_area_closing(player.sock)
                 Protocol.playing_area_closing(self.caller)
+
             elif data["type"] == "generate_deck_response":
                 self.caller_deck(data)
+
             elif data["type"] == "shuffle_response":
                 self.handle_shuffle_response(data)
+
             elif data["type"] == "validate_decks_success":
                 self.decks_validated(conn, data)
+
             elif data["type"] == "choose_winner_response":
                 self.handle_choose_winner_response(data)
+
+            elif data["type"] == "close_game":
+                self.close()
         else:
             self.handle_disconnect(conn)
 
@@ -173,3 +186,9 @@ class PlayingArea:
                 Protocol.winner_decision_failed(self.caller)
                 for player in self.players:
                     Protocol.winner_decision_failed(player.sock)
+
+    def close(self):
+        self.sel.close()
+        self.sock.close()
+        self.logger.info(f"Goodbye!")
+        exit()
