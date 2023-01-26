@@ -1,13 +1,15 @@
 import json
+from base64 import b64encode, b64decode
+from src.utils.RSA import RSA
 
 
 def send_message(func):
-    def wrapper(sock, *args, **kwargs):
+    def wrapper(sock, private_key,  *args, **kwargs):
         payload = func(*args, **kwargs)
-        payload = json.dumps(payload)
-        message = len(payload).to_bytes(4, 'big') + payload.encode('utf-8')
+        payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
+        payload = json.dumps(payload).encode('utf-8')
+        message = len(payload).to_bytes(4, 'big') + payload
         sock.send(message)
-        return message
 
     return wrapper
 
@@ -179,3 +181,17 @@ class Protocol:
         return {
             "type": "close_game"
         }
+
+    @staticmethod
+    @send_message
+    def publish_data(_id, public_key):
+        return {
+            "type": "publish_data",
+            "id": _id,
+            "public_key": public_key
+        }
+
+    @staticmethod
+    @send_message
+    def sign_player_data(data):
+        pass

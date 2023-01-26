@@ -3,11 +3,12 @@ import selectors
 import socket
 from collections import namedtuple, defaultdict
 
+from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.protocol import Protocol
 from src.utils.status import GameStatus
 
-Player = namedtuple('Player', ['name', 'sock'])
+Player = namedtuple('Player', ['name', 'sock', 'validated'])
 
 
 class PlayingArea:
@@ -31,6 +32,7 @@ class PlayingArea:
         self.decks = []
         self.winner_choices = []
         self.logger.info(f"Playing Area started")
+        self.private_key, self.public_key = RSA.generate_key_pair()
 
     def accept(self, sock):
         conn, addr = sock.accept()
@@ -55,6 +57,9 @@ class PlayingArea:
 
             elif data["type"] == "join_caller":
                 self.join_caller(conn, data)
+
+            elif data["type"] == "publish_data":
+                self.publish_data(conn, data)
 
             elif data["type"] == "start_game":
                 self.start_game(data)
@@ -91,7 +96,7 @@ class PlayingArea:
 
     def caller_deck(self, data):
         self.decks.append((0, data["deck"]))
-        Protocol.shuffle_request(self.players[0].sock, data["deck"])
+        Protocol.shuffle_request(self.players[0].sock, self.private_key, data["deck"])
 
     def handle_disconnect(self, conn):
         self.sel.unregister(conn)
@@ -106,26 +111,26 @@ class PlayingArea:
     def join_player(self, conn, data):
         if self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
-            self.players.append(Player(data["name"], conn))
-            Protocol.join_response(conn, "ok", len(self.players))
+            self.players.append(Player(data["name"], conn, False))
+            Protocol.join_response(conn, self.private_key, "ok", len(self.players))
         else:
             self.logger.info(f"Game already started")
-            Protocol.join_response(conn, "error")
+            Protocol.join_response(conn, self.private_key, "error")
 
     def join_caller(self, conn: socket.socket, data: dict):
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
             self.caller = conn
-            Protocol.join_caller_response(conn, "ok")
+            Protocol.join_caller_response(conn, self.private_key, "ok")
         else:
             self.logger.info(f"Caller already exists")
-            Protocol.join_caller_response(conn, "error")
+            Protocol.join_caller_response(conn, self.private_key, "error")
 
     def start_game(self, data):
         self.game_status = GameStatus.STARTED
 
         for player in self.players:
-            Protocol.start_game(player.sock, data["size"])
+            Protocol.start_game(player.sock, self.private_key, data["size"])
 
     # TODO: Create decorator to check if caller is connected
     def receive_card(self, conn, data):
@@ -139,35 +144,35 @@ class PlayingArea:
                 self.request_cards_validation()
 
     def request_cards_validation(self):
-        Protocol.validate_cards(self.caller, self.cards)
+        Protocol.validate_cards(self.caller, self.private_key, self.cards)
         for player in self.players:
-            Protocol.validate_cards(player.sock, self.cards)
+            Protocol.validate_cards(player.sock, self.private_key, self.cards)
 
     def cards_validated(self, conn, data):
         self.validated_cards[conn] = data["cards"]
 
         if len(self.validated_cards) == len(self.players) + 1:
             self.logger.info(f"All cards validated")
-            Protocol.generate_deck_request(self.caller)
+            Protocol.generate_deck_request(self.caller, self.private_key)
 
     def handle_shuffle_response(self, data):
         self.decks.append((data["id"], data["deck"]))
         if len(self.decks) == len(self.players) + 1:
             self.logger.info(f"All decks shuffled")
-            Protocol.validate_decks(self.caller, self.decks)
+            Protocol.validate_decks(self.caller, self.private_key, self.decks)
             for player in self.players:
-                Protocol.validate_decks(player.sock, self.decks)
+                Protocol.validate_decks(player.sock, self.private_key, self.decks)
         else:
-            Protocol.shuffle_request(self.players[data["id"]].sock, data["deck"])
+            Protocol.shuffle_request(self.players[data["id"]].sock, self.private_key, data["deck"])
 
     def decks_validated(self, conn, data):
         self.validated_decks[conn] = data["decks"]
 
         if len(self.validated_decks) == len(self.players) + 1:
             self.logger.info(f"All decks validated")
-            Protocol.choose_winner(self.caller, self.decks[-1][1], self.cards)
+            Protocol.choose_winner(self.caller, self.private_key, self.decks[-1][1], self.cards)
             for player in self.players:
-                Protocol.choose_winner(player.sock, self.decks[-1][1], self.cards)
+                Protocol.choose_winner(player.sock, self.private_key, self.decks[-1][1], self.cards)
 
     def handle_choose_winner_response(self, data):
         self.winner_choices.append(data["winner"])
@@ -177,18 +182,24 @@ class PlayingArea:
             if len(set(self.winner_choices)) == 1:
                 self.logger.info(f"All players chose the same winner")
                 self.logger.info(f"Winner is {self.winner_choices[0]}")
-                Protocol.announce_winner(self.caller, self.winner_choices[0])
+                Protocol.announce_winner(self.caller, self.private_key, self.winner_choices[0])
                 for player in self.players:
-                    Protocol.announce_winner(player.sock, self.winner_choices[0])
+                    Protocol.announce_winner(player.sock, self.private_key, self.winner_choices[0])
             else:
                 self.logger.info(f"Players chose different winners")
                 self.logger.info(f"Something went wrong")
-                Protocol.winner_decision_failed(self.caller)
+                Protocol.winner_decision_failed(self.caller, self.private_key)
                 for player in self.players:
-                    Protocol.winner_decision_failed(player.sock)
+                    Protocol.winner_decision_failed(player.sock, self.private_key)
 
     def close(self):
         self.sel.close()
         self.sock.close()
         self.logger.info(f"Goodbye!")
         exit()
+
+    def publish_data(self, conn, data):
+        if self.caller:
+            Protocol.sign_player_data(self.caller, self.private_key, data)
+
+

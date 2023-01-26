@@ -28,11 +28,12 @@ class Player:
         orig_fl = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
         fcntl.fcntl(sys.stdin, fcntl.F_SETFL, orig_fl | os.O_NONBLOCK)
         self.sel.register(sys.stdin, selectors.EVENT_READ, self.keyboard_input)
+        self.private_key, self.public_key = RSA.generate_key_pair()
 
         try:
             self.sock.connect((self.host, self.port))
             # Ask server to join
-            Protocol.join_request(self.sock, self.name)
+            Protocol.join_request(self.sock, self.private_key, self.name)
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()
@@ -99,6 +100,7 @@ class Player:
         if data["status"] == "ok":
             self.logger.info(f"Joined as player")
             self.id = data["id"]
+            Protocol.publish_data(self.sock, self.private_key, self.id, self.public_key)
         else:
             self.logger.info(f"Failed to join")
             self.close()
@@ -108,30 +110,30 @@ class Player:
         self.deck_size = data["size"]
         card = Game.generate_card(self.deck_size)
         self.logger.info(f"Generated card: {card}")
-        Protocol.send_card(conn, card)
+        Protocol.send_card(conn, self.private_key, card)
 
     def shuffle(self, conn, data):
         self.logger.info(f"Shuffling deck")
         shuffled_deck = Game.shufle_deck(data["deck"])
-        Protocol.shuffle_response(conn, shuffled_deck, self.id)
+        Protocol.shuffle_response(conn, self.private_key, shuffled_deck, self.id)
 
     def validate_cards(self, conn, data):
         for card in data["cards"]:
             self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(self.deck_size, card):
                 self.logger.info(f"Invalid card")
-                Protocol.validate_cards_error(self.sock, "Invalid Card", card)
+                Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
         else:
             self.logger.info(f"Valid cards")
-            Protocol.validate_cards_success(conn, data["cards"])
+            Protocol.validate_cards_success(conn, self.private_key, data["cards"])
 
     def validate_decks(self, conn, data):
         # TODO: Validate decks
         self.logger.info(f"Validating decks")
-        Protocol.validate_decks_success(conn, data["decks"])
+        Protocol.validate_decks_success(conn, self.private_key, data["decks"])
 
     def choose_winner(self, conn, data):
         self.logger.info(f"Choosing winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
-        Protocol.choose_winner_response(conn, winner)
+        Protocol.choose_winner_response(conn, self.private_key, winner)

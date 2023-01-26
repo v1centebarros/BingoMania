@@ -5,6 +5,7 @@ import selectors
 import socket
 import sys
 
+from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.protocol import Protocol
 from src.utils.Game import Game
@@ -22,11 +23,12 @@ class Caller:
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.sock, selectors.EVENT_READ, self.read)
         self.logger = get_logger(__name__)
+        self.private_key, self.public_key = RSA.generate_key_pair()
 
         try:
             self.sock.connect((self.host, self.port))
             # Ask server to join
-            Protocol.join_caller_request(self.sock, self.name)
+            Protocol.join_caller_request(self.sock, self.private_key, self.name)
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()
@@ -91,34 +93,34 @@ class Caller:
             self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(DEFAULT_SIZE, card):
                 self.logger.info(f"Invalid card")
-                Protocol.validate_cards_error(self.sock, "Invalid Card", card)
+                Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
         else:
             self.logger.info(f"Valid cards")
-            Protocol.validate_cards_success(conn, data["cards"])
+            Protocol.validate_cards_success(conn, self.private_key, data["cards"])
 
     def keyboard_input(self, stdin):
         input_msg = stdin.read()
 
         if input_msg.startswith("/start"):
-            Protocol.start_game(self.sock, DEFAULT_SIZE)
+            Protocol.start_game(self.sock, self.private_key, DEFAULT_SIZE)
 
         elif input_msg.startswith("/end"):
-            Protocol.close_game(self.sock)
+            Protocol.close_game(self.sock, self.private_key)
         else:
             print("Invalid command")
 
     def generate_deck(self):
         self.logger.info(f"Generating deck")
         deck = Game.generate_deck(DEFAULT_SIZE)
-        Protocol.generate_deck_response(self.sock, deck)
+        Protocol.generate_deck_response(self.sock, self.private_key, deck)
 
     def validate_decks(self, conn, data):
         # TODO: Validate decks
         self.logger.info(f"Validating decks")
-        Protocol.validate_decks_success(conn, data["decks"])
+        Protocol.validate_decks_success(conn, self.private_key, data["decks"])
 
     def choose_winner(self, conn, data):
         self.logger.info(f"Choose winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
-        Protocol.choose_winner_response(conn, winner)
+        Protocol.choose_winner_response(conn, self.private_key, winner)
