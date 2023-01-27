@@ -32,7 +32,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_caller_response(status, players_not_validated, playing_area_public_key=None):
+    def join_caller_response(status, players_not_validated=None, playing_area_public_key=None):
         return {
             "type": "join_caller_response",
             "status": status,
@@ -133,18 +133,19 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def validate_decks(decks):
+    def validate_decks(decks, symmetric_keys):
         return {
             "type": "validate_decks",
-            "decks": decks
+            "decks": decks,
+            "symmetric_keys": symmetric_keys
         }
 
     @staticmethod
     @send_message
-    def validate_decks_success(decks):
+    def validate_decks_success(final_deck):
         return {
             "type": "validate_decks_success",
-            "decks": decks
+            "final_deck": final_deck
         }
 
     @staticmethod
@@ -227,4 +228,20 @@ class Protocol:
         return {
             "type": "players_list",
             "players": players
+        }
+
+    @staticmethod
+    @send_message
+    def share_key():
+        return {
+            "type": "share_key"
+        }
+
+    @staticmethod
+    @send_message
+    def share_key_response(symmetric_key, seq):
+        return {
+            "type": "share_key_response",
+            "symmetric_key": symmetric_key,
+            "seq": seq
         }

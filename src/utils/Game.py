@@ -18,7 +18,7 @@ class Game:
         return random.sample(range(1, n + 1), n)
 
     @staticmethod
-    def shufle_deck(deck: list[int]) -> list[int]:
+    def shufle_deck(deck: list[int]|list[bytes]) -> list[int]|list[bytes]:
         """Shuffle the deck."""
         return random.sample(deck, len(deck))
 

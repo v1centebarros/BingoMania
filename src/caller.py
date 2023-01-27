@@ -4,10 +4,13 @@ import os
 import selectors
 import socket
 import sys
+from base64 import b64encode, b64decode
+
+from src.protocol import Protocol
+from src.utils.AES import AES
+from src.utils.Game import Game
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
-from src.protocol import Protocol
-from src.utils.Game import Game
 
 DEFAULT_SIZE = 100
 
@@ -24,6 +27,7 @@ class Caller:
         self.logger = get_logger(__name__)
         self.private_key, self.public_key = RSA.generate_key_pair()
         self.playing_area_public_key = None
+        self.symmetric_key = AES.generate_key()
 
         try:
             self.sock.connect((self.host, self.port))
@@ -67,6 +71,8 @@ class Caller:
                 self.generate_deck()
             elif data["type"] == "playing_area_closing":
                 self.close()
+            elif data["type"] == "share_key":
+                self.share_key(conn, data)
 
             elif data["type"] == "validate_decks":
                 self.validate_decks(conn, data)
@@ -89,8 +95,9 @@ class Caller:
             self.playing_area_public_key = data["playing_area_public_key"]
             if data["players_not_validated"]:
                 for player in data["players_not_validated"]:
-                    self.logger.info(f"Player {player} not Signed")
-                    # TODO: Sign player data
+                    self.logger.info(f"Player {player[2]} not Signed")
+                    # FIXME: Signature is fucking things up
+                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]})
 
         else:
             self.logger.info(f"A caller already exists")
@@ -120,13 +127,28 @@ class Caller:
     def generate_deck(self):
         self.logger.info(f"Generating deck")
         deck = Game.generate_deck(DEFAULT_SIZE)
-        Protocol.generate_deck_response(self.sock, self.private_key, deck)
+        self.logger.info(f"Caller's deck: {deck}")
+        deck = AES.encrypt_list(self.symmetric_key, AES.lst_int_to_bytes(deck))
+        Protocol.generate_deck_response(self.sock, self.private_key, [b64encode(number).decode() for number in deck])
 
     def validate_decks(self, conn, data):
-        # TODO: Validate decks
         self.check_signature(data)
         self.logger.info(f"Validating decks")
-        Protocol.validate_decks_success(conn, self.private_key, data["decks"])
+        deserialized_symmetric_keys = [b64decode(key) for seq, key in data["symmetric_keys"]]
+        deserialized_decks = [[b64decode(number) for number in deck] for seq, deck in data["decks"]]
+
+        for i in range(len(deserialized_decks)-1, 0, -1):
+            next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
+            if set(next_deck).difference(set(deserialized_decks[i-1])):
+                self.logger.info(f"Invalid deck")
+                # TODO send error
+        else:
+            self.logger.info(f"All decks are valid")
+            self.logger.info(f"Generating final deck")
+            final_deck = deserialized_decks[-1]
+            for symmetric_key in reversed(deserialized_symmetric_keys):
+                final_deck = AES.decrypt_list(symmetric_key, final_deck)
+            Protocol.validate_decks_success(conn, self.private_key, AES.lst_bytes_to_int(final_deck))
 
     def choose_winner(self, conn, data):
         self.check_signature(data)
@@ -149,3 +171,8 @@ class Caller:
             # TODO: Make a protocol call to this
         else:
             self.logger.info(f"Valid signature")
+
+    def share_key(self, conn, data):
+        self.logger.info(f"Sharing key")
+        self.check_signature(data)
+        Protocol.share_key_response(conn, self.private_key, b64encode(self.symmetric_key).decode(), 0)

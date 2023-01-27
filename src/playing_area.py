@@ -1,6 +1,7 @@
 import json
 import selectors
 import socket
+from base64 import b64encode, b64decode
 from collections import defaultdict
 
 from src.protocol import Protocol
@@ -25,7 +26,7 @@ class PlayingArea:
         self.caller = None
         self.players: list[PlayerType] = []
         self.validated_cards = defaultdict(list)
-        self.validated_decks = defaultdict(list)
+        self.validated_decks = defaultdict(tuple)
         self.game_status: GameStatus = GameStatus.NOT_STARTED
         self.cards = {}
         self.decks = []
@@ -93,6 +94,9 @@ class PlayingArea:
 
             elif data["type"] == "close_game":
                 self.close()
+
+            elif data["type"] == "share_key_response":
+                self.handle_share_key_response(conn, data)
         else:
             self.handle_disconnect(conn)
 
@@ -129,7 +133,6 @@ class PlayingArea:
             self.logger.info(f"New caller from {data['name']}")
             self.caller = CallerType(seq=0, nick=data["name"], sock=conn, public_key=data["public_key"])
             # Check all the players that need to be validated
-            # TODO: Missing
             players_not_validated = [player.to_list() for player in self.players if not player.caller_signature]
             Protocol.join_caller_response(conn, self.private_key, "ok", players_not_validated, self.public_key)
         else:
@@ -172,21 +175,32 @@ class PlayingArea:
         self.decks.append((data["id"], data["deck"]))
         if len(self.decks) == len(self.players) + 1:
             self.logger.info(f"All decks shuffled")
-            Protocol.validate_decks(self.caller.sock, self.private_key, self.decks)
+            self.logger.info(f"Please share you symmetric key")
+            Protocol.share_key(self.caller.sock, self.private_key)
             for player in self.players:
-                Protocol.validate_decks(player.sock, self.private_key, self.decks)
+                Protocol.share_key(player.sock, self.private_key)
         else:
             Protocol.shuffle_request(self.players[data["id"]].sock, self.private_key, data["deck"])
 
+    def request_decks_validation(self):
+        symmetric_keys = [(0, b64encode(self.caller.symmetric_key).decode())] + [(player.seq, b64encode(player.symmetric_key).decode()) for player in self.players]
+        Protocol.validate_decks(self.caller.sock, self.private_key, self.decks, symmetric_keys)
+        for player in self.players:
+            Protocol.validate_decks(player.sock, self.private_key, self.decks, symmetric_keys)
+
     def decks_validated(self, conn, data):
         self.check_signature(conn, data)
-        self.validated_decks[conn] = data["decks"]
+        self.validated_decks[conn] = tuple(data["final_deck"])
 
         if len(self.validated_decks) == len(self.players) + 1:
             self.logger.info(f"All decks validated")
-            Protocol.choose_winner(self.caller.sock, self.private_key, self.decks[-1][1], self.cards)
-            for player in self.players:
-                Protocol.choose_winner(player.sock, self.private_key, self.decks[-1][1], self.cards)
+            # Check if all players have the same deck
+            if len(set(self.validated_decks.values())) == 1:
+                self.logger.info(f"All players got the same deck")
+                final_deck = self.validated_decks[self.caller.sock]
+                Protocol.choose_winner(self.caller.sock, self.private_key, final_deck, self.cards)
+                for player in self.players:
+                    Protocol.choose_winner(player.sock, self.private_key, final_deck, self.cards)
 
     def handle_choose_winner_response(self, conn, data):
         self.check_signature(conn, data)
@@ -213,7 +227,7 @@ class PlayingArea:
         self.logger.info(f"Goodbye!")
         exit()
 
-    def publish_data(self,conn, data):
+    def publish_data(self, conn, data):
         self.logger.info(f"Sending Data to be Signed by the caller")
         if self.caller:
             player = next(filter(lambda p: p.seq == data["id"], self.players), None)
@@ -252,3 +266,21 @@ class PlayingArea:
                 return player.public_key
             else:
                 raise Exception("Player not found")
+
+    def handle_share_key_response(self, conn, data):
+
+        if data["seq"] == 0:
+            self.logger.info(f"Caller symmetric key received")
+            self.caller.symmetric_key = b64decode(data["symmetric_key"])
+        else:
+            player = next(filter(lambda p: p.seq == data["seq"], self.players), None)
+            if player:
+                self.logger.info(f"Player {player.seq} symmetric key received")
+                player.symmetric_key = b64decode(data["symmetric_key"])
+            else:
+                raise Exception("Player not found")
+
+        # check if symmetric_key is not None for all players and caller
+        if all([p.symmetric_key for p in self.players]) and self.caller.symmetric_key:
+            self.logger.info(f"All symmetric keys received")
+            self.request_decks_validation()

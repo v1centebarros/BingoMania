@@ -30,8 +30,17 @@ class PlayerType:
     seq: int
     nick: str
     public_key: RSAPublicKey | None
+    symmetric_key: bytes | None
     caller_signature: bytes | None
     sock: socket.socket
+
+    def __init__(self, seq, nick, public_key, caller_signature, sock):
+        self.seq = seq
+        self.nick = nick
+        self.public_key = public_key
+        self.caller_signature = caller_signature
+        self.sock = sock
+        self.symmetric_key = None
 
     def to_tuple(self):
         return PlayerTuple(self.seq, self.public_key, self.nick, self.caller_signature)
