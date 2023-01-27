@@ -28,7 +28,7 @@ class Caller:
         try:
             self.sock.connect((self.host, self.port))
             # Ask server to join
-            Protocol.join_caller_request(self.sock, self.private_key, self.name)
+            Protocol.join_caller_request(self.sock, self.private_key, self.name, self.public_key)
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()

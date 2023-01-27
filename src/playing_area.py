@@ -7,7 +7,7 @@ from src.protocol import Protocol
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.utils.status import GameStatus
-from src.utils.types import PlayerType
+from src.utils.types import PlayerType, CallerType
 
 
 class PlayingArea:
@@ -58,13 +58,13 @@ class PlayingArea:
                 self.join_caller(conn, data)
 
             elif data["type"] == "publish_data":
-                self.publish_data(data)
+                self.publish_data(conn, data)
 
             elif data["type"] == "sign_player_data_response":
                 self.sign_player_response(conn, data)
 
             elif data["type"] == "start_game":
-                self.start_game(data)
+                self.start_game(conn, data)
 
             elif data["type"] == "card":
                 self.receive_card(conn, data)
@@ -80,23 +80,23 @@ class PlayingArea:
                 Protocol.playing_area_closing(self.caller)
 
             elif data["type"] == "generate_deck_response":
-                self.caller_deck(data)
+                self.caller_deck(conn, data)
 
             elif data["type"] == "shuffle_response":
-                self.handle_shuffle_response(data)
+                self.handle_shuffle_response(conn, data)
 
             elif data["type"] == "validate_decks_success":
                 self.decks_validated(conn, data)
 
             elif data["type"] == "choose_winner_response":
-                self.handle_choose_winner_response(data)
+                self.handle_choose_winner_response(conn, data)
 
             elif data["type"] == "close_game":
                 self.close()
         else:
             self.handle_disconnect(conn)
 
-    def caller_deck(self, data):
+    def caller_deck(self, conn, data):
         self.decks.append((0, data["deck"]))
         Protocol.shuffle_request(self.players[0].sock, self.private_key, data["deck"])
 
@@ -127,22 +127,24 @@ class PlayingArea:
     def join_caller(self, conn: socket.socket, data: dict):
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
-            self.caller = conn
+            self.caller = CallerType(seq=0, nick=data["name"], sock=conn, public_key=data["public_key"])
             # Check all the players that need to be validated
-            #TODO: Missing
-            players_not_validated = [player.to_tuple() for player in self.players if not player.caller_signature]
+            # TODO: Missing
+            players_not_validated = [player.to_list() for player in self.players if not player.caller_signature]
             Protocol.join_caller_response(conn, self.private_key, "ok", players_not_validated, self.public_key)
         else:
             self.logger.info(f"Caller already exists")
             Protocol.join_caller_response(conn, self.private_key, "error")
 
-    def start_game(self, data):
+    def start_game(self, conn, data):
+        self.check_signature(conn, data)
         self.game_status = GameStatus.STARTED
 
         for player in self.players:
             Protocol.start_game(player.sock, self.private_key, data["size"])
 
     def receive_card(self, conn, data):
+        self.check_signature(conn, data)
         for player in self.players:
             if player.sock == conn and player.nick not in self.cards.keys():
                 self.logger.info(f"Received card from {player.nick}")
@@ -153,37 +155,41 @@ class PlayingArea:
                 self.request_cards_validation()
 
     def request_cards_validation(self):
-        Protocol.validate_cards(self.caller, self.private_key, self.cards)
+        Protocol.validate_cards(self.caller.sock, self.private_key, self.cards)
         for player in self.players:
             Protocol.validate_cards(player.sock, self.private_key, self.cards)
 
     def cards_validated(self, conn, data):
+        self.check_signature(conn, data)
         self.validated_cards[conn] = data["cards"]
 
         if len(self.validated_cards) == len(self.players) + 1:
             self.logger.info(f"All cards validated")
-            Protocol.generate_deck_request(self.caller, self.private_key)
+            Protocol.generate_deck_request(self.caller.sock, self.private_key)
 
-    def handle_shuffle_response(self, data):
+    def handle_shuffle_response(self, conn, data):
+        self.check_signature(conn, data)
         self.decks.append((data["id"], data["deck"]))
         if len(self.decks) == len(self.players) + 1:
             self.logger.info(f"All decks shuffled")
-            Protocol.validate_decks(self.caller, self.private_key, self.decks)
+            Protocol.validate_decks(self.caller.sock, self.private_key, self.decks)
             for player in self.players:
                 Protocol.validate_decks(player.sock, self.private_key, self.decks)
         else:
             Protocol.shuffle_request(self.players[data["id"]].sock, self.private_key, data["deck"])
 
     def decks_validated(self, conn, data):
+        self.check_signature(conn, data)
         self.validated_decks[conn] = data["decks"]
 
         if len(self.validated_decks) == len(self.players) + 1:
             self.logger.info(f"All decks validated")
-            Protocol.choose_winner(self.caller, self.private_key, self.decks[-1][1], self.cards)
+            Protocol.choose_winner(self.caller.sock, self.private_key, self.decks[-1][1], self.cards)
             for player in self.players:
                 Protocol.choose_winner(player.sock, self.private_key, self.decks[-1][1], self.cards)
 
-    def handle_choose_winner_response(self, data):
+    def handle_choose_winner_response(self, conn, data):
+        self.check_signature(conn, data)
         self.winner_choices.append(data["winner"])
 
         if len(self.winner_choices) == len(self.players) + 1:
@@ -191,13 +197,13 @@ class PlayingArea:
             if len(set(self.winner_choices)) == 1:
                 self.logger.info(f"All players chose the same winner")
                 self.logger.info(f"Winner is {self.winner_choices[0]}")
-                Protocol.announce_winner(self.caller, self.private_key, self.winner_choices[0])
+                Protocol.announce_winner(self.caller.sock, self.private_key, self.winner_choices[0])
                 for player in self.players:
                     Protocol.announce_winner(player.sock, self.private_key, self.winner_choices[0])
             else:
                 self.logger.info(f"Players chose different winners")
                 self.logger.info(f"Something went wrong")
-                Protocol.winner_decision_failed(self.caller, self.private_key)
+                Protocol.winner_decision_failed(self.caller.sock, self.private_key)
                 for player in self.players:
                     Protocol.winner_decision_failed(player.sock, self.private_key)
 
@@ -207,15 +213,16 @@ class PlayingArea:
         self.logger.info(f"Goodbye!")
         exit()
 
-    def publish_data(self, data):
+    def publish_data(self,conn, data):
         self.logger.info(f"Sending Data to be Signed by the caller")
         if self.caller:
             player = next(filter(lambda p: p.seq == data["id"], self.players), None)
             if player:
                 player.public_key = data["public_key"]
-                Protocol.sign_player_data(self.caller, self.private_key, player.to_list())
+                Protocol.sign_player_data(self.caller.sock, self.private_key, player.to_list())
 
     def sign_player_response(self, conn, data):
+        self.check_signature(conn, data)
         self.logger.info(f"Sending Signed Data to the player")
         player = next(filter(lambda p: p.seq == data["player"][0], self.players))
         player.caller_signature = data["signed_player_data"]
@@ -224,4 +231,24 @@ class PlayingArea:
 
     def update_players_list(self):
         for player in self.players:
-            Protocol.players_list(player.sock, self.private_key, [p.to_tuple() for p in self.players])
+            Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
+
+    def check_signature(self, conn, data):
+        public_key = self.find_public_key(conn)
+        signature = data.pop("signature")
+        if not RSA.verify_signature(public_key, signature, json.dumps(data).encode('utf-8')):
+            self.logger.info(f"Invalid signature")
+            raise Exception("Invalid signature")
+            # TODO: Make a protocol call to this
+        else:
+            self.logger.info(f"Valid signature")
+
+    def find_public_key(self, sock):
+        if sock == self.caller.sock:
+            return self.caller.public_key
+        else:
+            player = next(filter(lambda p: p.sock == sock, self.players), None)
+            if player:
+                return player.public_key
+            else:
+                raise Exception("Player not found")

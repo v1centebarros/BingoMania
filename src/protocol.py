@@ -23,10 +23,11 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_caller_request(name):
+    def join_caller_request(name, public_key):
         return {
             "type": "join_caller",
-            "name": name
+            "name": name,
+            "public_key": public_key
         }
 
     @staticmethod

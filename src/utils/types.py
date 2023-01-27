@@ -11,6 +11,21 @@ Signed_deck_tuple = namedtuple('SignedDeck', ['deck', 'signature'], defaults=[li
 
 
 @dataclass
+class CallerType:
+    seq: int
+    nick: str
+    public_key: RSAPublicKey | None
+    sock: socket.socket
+
+    def to_tuple(self):
+        # TODO: remove this method
+        return PlayerTuple(self.seq, self.public_key, self.nick, None)
+
+    def to_list(self):
+        return [self.seq, self.public_key, self.nick]
+
+
+@dataclass
 class PlayerType:
     seq: int
     nick: str
