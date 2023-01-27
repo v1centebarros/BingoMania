@@ -4,8 +4,6 @@ import os
 import selectors
 import socket
 import sys
-from pprint import pprint
-
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.protocol import Protocol
@@ -126,25 +124,28 @@ class Caller:
 
     def validate_decks(self, conn, data):
         # TODO: Validate decks
+        self.check_signature(data)
         self.logger.info(f"Validating decks")
         Protocol.validate_decks_success(conn, self.private_key, data["decks"])
 
     def choose_winner(self, conn, data):
+        self.check_signature(data)
         self.logger.info(f"Choose winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.private_key, winner)
 
     def sign_player_data(self, conn, data):
-        pprint(data)
-        if self.check_signature(data):
-            self.logger.info(f"Message correctly signed")
-        else:
-            self.logger.info(f"Message not correctly signed")
+        self.check_signature(data)
         self.logger.info(f"Signing player data")
         signed_player_data = RSA.sign(self.private_key, data["player"])
         Protocol.sign_player_data_response(conn, self.private_key, signed_player_data, data["player"])
 
     def check_signature(self, data):
         signature = data.pop("signature")
-        return RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8'))
+        if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
+            self.logger.info(f"Invalid signature")
+            raise Exception("Invalid signature")
+            # TODO: Make a protocol call to this
+        else:
+            self.logger.info(f"Valid signature")
