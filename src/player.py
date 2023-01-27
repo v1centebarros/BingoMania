@@ -5,12 +5,12 @@ import selectors
 import socket
 import sys
 
+from src.protocol import Protocol
 from src.utils.AES import AES
+from src.utils.Game import Game
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
-from src.protocol import Protocol
-from src.utils.Game import Game
-from src.utils.types import Keys
+from src.utils.types import Keys, PlayerTuple
 
 
 class Player:
@@ -29,6 +29,8 @@ class Player:
         fcntl.fcntl(sys.stdin, fcntl.F_SETFL, orig_fl | os.O_NONBLOCK)
         self.sel.register(sys.stdin, selectors.EVENT_READ, self.keyboard_input)
         self.private_key, self.public_key = RSA.generate_key_pair()
+        self.players: list[PlayerTuple] = []
+        self.playing_area_public_key = None
 
         try:
             self.sock.connect((self.host, self.port))
@@ -65,6 +67,8 @@ class Player:
                 self.join(data)
             elif data["type"] == "start_game":
                 self.generate_card(conn, data)
+            elif data["type"] == "login_response":
+                self.handle_login_response(data)
             elif data["type"] == "validate_cards":
                 self.validate_cards(conn, data)
             elif data["type"] == "shuffle":
@@ -78,6 +82,9 @@ class Player:
                 self.choose_winner(conn, data)
             elif data["type"] == "announce_winner":
                 self.logger.info(f"Winner: {data['winner']}")
+
+            elif data["type"] == "players_list":
+                self.get_players(data["players"])
             elif data["type"] == "winner_decision_failed":
                 self.logger.info(f"Winner decision failed")
                 self.close()
@@ -93,6 +100,8 @@ class Player:
 
         if input_msg.startswith("/log"):
             self.logger.info(f"I want the log!")
+        elif input_msg.startswith("/players"):
+            self.print_players()
         else:
             print("Invalid command")
 
@@ -100,6 +109,7 @@ class Player:
         if data["status"] == "ok":
             self.logger.info(f"Joined as player")
             self.id = data["id"]
+            self.playing_area_public_key = data["playing_area_public_key"]
             Protocol.publish_data(self.sock, self.private_key, self.id, self.public_key)
         else:
             self.logger.info(f"Failed to join")
@@ -137,3 +147,19 @@ class Player:
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.private_key, winner)
+
+    def handle_login_response(self, data):
+        if data["status"] == "ok":
+            self.logger.info(f"Logged in")
+        else:
+            self.logger.info(f"Failed to log in")
+            self.close()
+
+    def print_players(self):
+        print("Players:")
+        for player in self.players:
+            print(f"SEQ: {player.seq}, Nick: {player.nick}")
+
+    def get_players(self, players):
+        for player in players:
+            self.players.append(PlayerTuple(*player))

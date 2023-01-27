@@ -1,14 +1,13 @@
 import json
 import selectors
 import socket
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 
+from src.protocol import Protocol
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
-from src.protocol import Protocol
 from src.utils.status import GameStatus
-
-Player = namedtuple('Player', ['name', 'sock', 'validated'])
+from src.utils.types import PlayerType
 
 
 class PlayingArea:
@@ -24,7 +23,7 @@ class PlayingArea:
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept)
         self.logger = get_logger(__name__)
         self.caller = None
-        self.players: list[Player] = []
+        self.players: list[PlayerType] = []
         self.validated_cards = defaultdict(list)
         self.validated_decks = defaultdict(list)
         self.game_status: GameStatus = GameStatus.NOT_STARTED
@@ -59,7 +58,10 @@ class PlayingArea:
                 self.join_caller(conn, data)
 
             elif data["type"] == "publish_data":
-                self.publish_data(conn, data)
+                self.publish_data(data)
+
+            elif data["type"] == "sign_player_data_response":
+                self.sign_player_response(conn, data)
 
             elif data["type"] == "start_game":
                 self.start_game(data)
@@ -103,16 +105,21 @@ class PlayingArea:
         if self.caller == conn:
             self.logger.info(f"Caller disconnected")
             self.caller = None
+            if GameStatus.STARTED:
+                for player in self.players:
+                    Protocol.playing_area_closing(player.sock)
         else:
             self.logger.info(f"Player disconnected")
             self.players = [player for player in self.players if player.sock != conn]
+            self.update_players_list()
         conn.close()
 
     def join_player(self, conn, data):
         if self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
-            self.players.append(Player(data["name"], conn, False))
-            Protocol.join_response(conn, self.private_key, "ok", len(self.players))
+            self.players.append(PlayerType(seq=len(self.players) + 1, nick=data["name"], sock=conn, public_key=None,
+                                           caller_signature=None))
+            Protocol.join_response(conn, self.private_key, "ok", len(self.players), self.public_key)
         else:
             self.logger.info(f"Game already started")
             Protocol.join_response(conn, self.private_key, "error")
@@ -121,7 +128,10 @@ class PlayingArea:
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
             self.caller = conn
-            Protocol.join_caller_response(conn, self.private_key, "ok")
+            # Check all the players that need to be validated
+            #TODO: Missing
+            players_not_validated = [player.to_tuple() for player in self.players if not player.caller_signature]
+            Protocol.join_caller_response(conn, self.private_key, "ok", players_not_validated, self.public_key)
         else:
             self.logger.info(f"Caller already exists")
             Protocol.join_caller_response(conn, self.private_key, "error")
@@ -132,12 +142,11 @@ class PlayingArea:
         for player in self.players:
             Protocol.start_game(player.sock, self.private_key, data["size"])
 
-    # TODO: Create decorator to check if caller is connected
     def receive_card(self, conn, data):
         for player in self.players:
-            if player.sock == conn and player.name not in self.cards.keys():
-                self.logger.info(f"Received card from {player.name}")
-                self.cards[player.name] = data["card"]
+            if player.sock == conn and player.nick not in self.cards.keys():
+                self.logger.info(f"Received card from {player.nick}")
+                self.cards[player.nick] = data["card"]
         else:
             if len(self.cards) == len(self.players):
                 self.logger.info(f"All cards received")
@@ -198,8 +207,21 @@ class PlayingArea:
         self.logger.info(f"Goodbye!")
         exit()
 
-    def publish_data(self, conn, data):
+    def publish_data(self, data):
+        self.logger.info(f"Sending Data to be Signed by the caller")
         if self.caller:
-            Protocol.sign_player_data(self.caller, self.private_key, data)
+            player = next(filter(lambda p: p.seq == data["id"], self.players), None)
+            if player:
+                player.public_key = data["public_key"]
+                Protocol.sign_player_data(self.caller, self.private_key, player.to_list())
 
+    def sign_player_response(self, conn, data):
+        self.logger.info(f"Sending Signed Data to the player")
+        player = next(filter(lambda p: p.seq == data["player"][0], self.players))
+        player.caller_signature = data["signed_player_data"]
+        Protocol.login_response(player.sock, self.private_key, "ok", data["signed_player_data"])
+        self.update_players_list()
 
+    def update_players_list(self):
+        for player in self.players:
+            Protocol.players_list(player.sock, self.private_key, [p.to_tuple() for p in self.players])

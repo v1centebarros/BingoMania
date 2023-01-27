@@ -1,10 +1,10 @@
 import json
-from base64 import b64encode, b64decode
+
 from src.utils.RSA import RSA
 
 
 def send_message(func):
-    def wrapper(sock, private_key,  *args, **kwargs):
+    def wrapper(sock, private_key, *args, **kwargs):
         payload = func(*args, **kwargs)
         payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
         payload = json.dumps(payload).encode('utf-8')
@@ -31,10 +31,12 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_caller_response(status):
+    def join_caller_response(status, players_not_validated, playing_area_public_key=None):
         return {
             "type": "join_caller_response",
-            "status": status
+            "status": status,
+            "players_not_validated": players_not_validated,
+            "playing_area_public_key": playing_area_public_key
         }
 
     @staticmethod
@@ -47,11 +49,12 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_response(status, _id):
+    def join_response(status, _id, playing_area_public_key=None):
         return {
             "type": "join_response",
             "status": status,
-            "id": _id
+            "id": _id,
+            "playing_area_public_key": playing_area_public_key
         }
 
     @staticmethod
@@ -194,4 +197,33 @@ class Protocol:
     @staticmethod
     @send_message
     def sign_player_data(data):
-        pass
+        return {
+            "type": "sign_player_data",
+            "player": data
+        }
+
+    @staticmethod
+    @send_message
+    def sign_player_data_response(signed_player_data, player):
+        return {
+            "type": "sign_player_data_response",
+            "signed_player_data": signed_player_data,
+            "player": player
+        }
+
+    @staticmethod
+    @send_message
+    def login_response(status, signed_player_data):
+        return {
+            "type": "login_response",
+            "status": status,
+            "signed_player_data": signed_player_data
+        }
+
+    @staticmethod
+    @send_message
+    def players_list(players):
+        return {
+            "type": "players_list",
+            "players": players
+        }

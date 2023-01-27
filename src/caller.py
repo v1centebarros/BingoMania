@@ -4,6 +4,7 @@ import os
 import selectors
 import socket
 import sys
+from pprint import pprint
 
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
@@ -24,6 +25,7 @@ class Caller:
         self.sel.register(self.sock, selectors.EVENT_READ, self.read)
         self.logger = get_logger(__name__)
         self.private_key, self.public_key = RSA.generate_key_pair()
+        self.playing_area_public_key = None
 
         try:
             self.sock.connect((self.host, self.port))
@@ -59,6 +61,8 @@ class Caller:
 
             if data["type"] == "join_caller_response":
                 self.join(data)
+            elif data["type"] == "sign_player_data":
+                self.sign_player_data(conn, data)
             elif data["type"] == "validate_cards":
                 self.validate_cards(conn, data)
             elif data["type"] == "generate_deck_request":
@@ -84,6 +88,12 @@ class Caller:
     def join(self, data):
         if data["status"] == "ok":
             self.logger.info(f"Joined as caller")
+            self.playing_area_public_key = data["playing_area_public_key"]
+            if data["players_not_validated"]:
+                for player in data["players_not_validated"]:
+                    self.logger.info(f"Player {player} not Signed")
+                    # TODO: Sign player data
+
         else:
             self.logger.info(f"A caller already exists")
             self.close()
@@ -124,3 +134,17 @@ class Caller:
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.private_key, winner)
+
+    def sign_player_data(self, conn, data):
+        pprint(data)
+        if self.check_signature(data):
+            self.logger.info(f"Message correctly signed")
+        else:
+            self.logger.info(f"Message not correctly signed")
+        self.logger.info(f"Signing player data")
+        signed_player_data = RSA.sign(self.private_key, data["player"])
+        Protocol.sign_player_data_response(conn, self.private_key, signed_player_data, data["player"])
+
+    def check_signature(self, data):
+        signature = data.pop("signature")
+        return RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8'))
