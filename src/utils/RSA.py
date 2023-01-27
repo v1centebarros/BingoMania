@@ -8,6 +8,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 class RSA:
     @staticmethod
     def serialize_public_key(public_key):
+        """
+        Serialize a public key.
+        :param public_key: the public key to serialize
+        :return: the serialized public key
+        """
         return public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -15,6 +20,12 @@ class RSA:
 
     @staticmethod
     def deserialize_public_key(public_key):
+        """
+        Deserialize a public key.
+        :param public_key: the public key to deserialize
+        :return: the deserialized public key
+        """
+
         return serialization.load_pem_public_key(
             public_key.encode('utf-8'),
             backend=default_backend()
@@ -22,6 +33,10 @@ class RSA:
 
     @staticmethod
     def generate_key_pair():
+
+        """ Generate a pair of assymetric key (private and public), using RSA algorithm.
+        :return: a tuple of private and public key"""
+
         private_key = rsa.generate_private_key(
             public_exponent=65537,
             key_size=2048,
@@ -41,6 +56,12 @@ class RSA:
 
     @staticmethod
     def encrypt_rsa(public_key, message):
+        """
+        Encrypt a message using the public key.
+        :param public_key: the public key to use
+        :param message: the message to encrypt
+        :return: the encrypted message
+        """
         public_key = RSA.deserialize_public_key(public_key)
         return public_key.encrypt(
             message,
@@ -53,6 +74,13 @@ class RSA:
 
     @staticmethod
     def decrypt_rsa(private_key, message):
+        """
+        Decrypt a message using the private key.
+        :param private_key: the private key to use
+        :param message: the message to decrypt
+        :return: the decrypted message
+        """
+
         message = private_key.decrypt(
             message,
             padding.OAEP(
@@ -65,6 +93,12 @@ class RSA:
 
     @staticmethod
     def sign(private_key, message):
+
+        """ Sign a message using the private key.
+        :param private_key: the private key to use
+        :param message: the message to sign
+        :return: the signature of the message"""
+
         message = message.__repr__().encode('utf-8')
         message_encrypt = RSA.encrypt(message)
 
@@ -79,6 +113,12 @@ class RSA:
 
     @staticmethod
     def verify_signature(public_key, signature, message):
+        """ Verify the signature of a message using the public key.
+        :param public_key: the public key to use
+        :param signature: the signature of the message
+        :param message: the message
+        :return: True if the signature is valid, False otherwise"""
+
         message = message.__repr__().encode('utf-8')
         signature = bytes.fromhex(signature)
         public_key = RSA.deserialize_public_key(public_key)
