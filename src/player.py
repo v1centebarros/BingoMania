@@ -116,6 +116,7 @@ class Player:
             self.close()
 
     def generate_card(self, conn, data):
+        self.check_signature(data)
         self.logger.info(f"Game started")
         self.deck_size = data["size"]
         card = Game.generate_card(self.deck_size)
@@ -124,10 +125,12 @@ class Player:
 
     def shuffle(self, conn, data):
         self.logger.info(f"Shuffling deck")
+        self.check_signature(data)
         shuffled_deck = Game.shufle_deck(data["deck"])
         Protocol.shuffle_response(conn, self.private_key, shuffled_deck, self.id)
 
     def validate_cards(self, conn, data):
+        self.check_signature(data)
         for card in data["cards"]:
             self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(self.deck_size, card):
@@ -139,10 +142,12 @@ class Player:
 
     def validate_decks(self, conn, data):
         # TODO: Validate decks
+        self.check_signature(data)
         self.logger.info(f"Validating decks")
         Protocol.validate_decks_success(conn, self.private_key, data["decks"])
 
     def choose_winner(self, conn, data):
+        self.check_signature(data)
         self.logger.info(f"Choosing winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
@@ -163,3 +168,12 @@ class Player:
     def get_players(self, players):
         for player in players:
             self.players.append(PlayerTuple(*player))
+
+    def check_signature(self, data):
+        signature = data.pop("signature")
+        if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
+            self.logger.info(f"Invalid signature")
+            raise Exception("Invalid signature")
+            # TODO: Make a protocol call to this
+        else:
+            self.logger.info(f"Valid signature")
