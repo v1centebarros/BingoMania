@@ -345,7 +345,7 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.playing_area_closing(player.sock, self.private_key)
             self.write_log(-1, msg)
-        self.close()
+        
 
     def validate_decks_error_handler(self, conn, data):
 
