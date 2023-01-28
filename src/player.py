@@ -16,7 +16,7 @@ from src.utils.types import Keys, PlayerTuple
 
 
 class Player:
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, deck_cheat, card_cheat):
         self.seq = None
         self.host = host
         self.port = port
@@ -24,6 +24,8 @@ class Player:
         self.rsa_cheat = rsa_cheat
         self.aes_cheat = aes_cheat
         self.winner_cheat = winner_cheat
+        self.deck_cheat = deck_cheat
+        self.card_cheat = card_cheat
         # Start Player's Socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
@@ -83,7 +85,6 @@ class Player:
                 self.validate_decks(conn, data)
             elif data["type"] == "playing_area_closing":
                 self.logger.info(f"Playing area closed")
-                self.close()
             elif data["type"] == "choose_winner":
                 self.choose_winner(conn, data)
             elif data["type"] == "announce_winner":
@@ -125,7 +126,12 @@ class Player:
         self.check_signature(data)
         self.logger.info(f"Game started")
         self.deck_size = data["size"]
-        card = Game.generate_card(self.deck_size)
+
+        if random.randint(0, 100) > self.card_cheat:
+            card = Game.generate_card(self.deck_size)
+        else:
+            self.logger.info(f"CHEATING Card generation")
+            card = Game.generate_card(random.randint(0, 1000))
         self.logger.info(f"Generated card: {card}")
         Protocol.send_card(conn, self.randomize_private_key(), card)
 
@@ -139,11 +145,13 @@ class Player:
 
     def validate_cards(self, conn, data):
         self.check_signature(data)
-        for card in data["cards"]:
-            self.logger.info(f"Validating {card}'s card")
-            if not Game.validate_card(self.deck_size, card):
+        for player, card in data["cards"].items():
+            self.logger.info(f"Validating {player}'s card")
+            print("CARD SIZE: ", self.deck_size)
+            if Game.failed_card_validation(self.deck_size, card):
                 self.logger.info(f"Invalid card")
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
+                break
         else:
             self.logger.info(f"Valid cards")
             Protocol.validate_cards_success(conn, self.randomize_private_key(), data["cards"])

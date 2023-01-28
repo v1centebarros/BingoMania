@@ -74,7 +74,7 @@ class Caller:
             elif data["type"] == "generate_deck_request":
                 self.generate_deck()
             elif data["type"] == "playing_area_closing":
-                self.close()
+                self.logger.info(f"Playing area closed")
             elif data["type"] == "share_key":
                 self.share_key(conn, data)
 
@@ -106,11 +106,13 @@ class Caller:
 
     def validate_cards(self, conn, data):
         self.check_signature(data)
-        for card in data["cards"]:
-            self.logger.info(f"Validating {card}'s card")
-            if not Game.validate_card(DEFAULT_SIZE, card):
+        for player, card in data["cards"].items():
+            self.logger.info(f"Validating {player}'s card")
+            print("CARD SIZE", DEFAULT_SIZE)
+            if Game.failed_card_validation(DEFAULT_SIZE, card):
                 self.logger.info(f"Invalid card")
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
+                break
         else:
             self.logger.info(f"Valid cards")
             Protocol.validate_cards_success(conn, self.randomize_private_key(), data["cards"])

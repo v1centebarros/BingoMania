@@ -9,7 +9,9 @@ if __name__ == '__main__':
     parser.add_argument('--rsa_cheat', type=int, default=0)
     parser.add_argument('--aes_cheat', type=int, default=0)
     parser.add_argument('--winner_cheat', type=int, default=0)
+    parser.add_argument('--deck_cheat', type=int, default=0)
+    parser.add_argument('--card_cheat', type=int, default=0)
     args = parser.parse_args()
 
-    caller = Player(args.host, args.port, args.name, args.rsa_cheat, args.aes_cheat, args.winner_cheat)
+    caller = Player(args.host, args.port, args.name, args.rsa_cheat, args.aes_cheat, args.winner_cheat, args.deck_cheat, args.card_cheat)
     caller.loop()

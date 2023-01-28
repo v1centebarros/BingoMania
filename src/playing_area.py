@@ -1,4 +1,3 @@
-from datetime import datetime
 import json
 import selectors
 import socket
@@ -76,11 +75,7 @@ class PlayingArea:
                 self.cards_validated(conn, data)
 
             elif data["type"] == "validate_cards_error":
-                self.logger.info(f"Cards not validated")
-                # FIXME: Isto não funciona testar quando o validar estiver implementado
-                for player in self.players:
-                    Protocol.playing_area_closing(player.sock)
-                Protocol.playing_area_closing(self.caller)
+                self.validate_cards_error_handler(conn)
 
             elif data["type"] == "generate_deck_response":
                 self.caller_deck(conn, data)
@@ -103,6 +98,15 @@ class PlayingArea:
                 self.handle_invalid_signature(conn, data)
         else:
             self.handle_disconnect(conn)
+
+    def validate_cards_error_handler(self, conn):
+        self.logger.info(f"Cards not validated")
+        self.validated_cards[conn] = [None]
+        if len(self.validated_cards) == len(self.players):
+            for player in self.players:
+                Protocol.playing_area_closing(player.sock, self.private_key)
+            Protocol.playing_area_closing(self.caller.sock, self.private_key)
+            print("Cards not validated")
 
     def caller_deck(self, conn, data):
         self.decks.append((0, data["deck"]))

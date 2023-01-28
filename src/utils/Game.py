@@ -16,7 +16,7 @@ class Game:
         return random.sample(deck, len(deck))
 
     @staticmethod
-    def validate_card(n: int, my_guess: list[int]) -> bool:
+    def failed_card_validation(n: int, my_guess: list[int]) -> bool:
         """Check if the player submits a valid card."""
         return len(my_guess) != n // 4 or len(set(my_guess)) != len(my_guess) or max(my_guess) > n or min(my_guess) < 1
 
