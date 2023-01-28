@@ -67,11 +67,12 @@ class Player:
         exit()
 
     def read(self, conn):
-        data_size = int.from_bytes(conn.recv(4), 'big')
+        data_size = int.from_bytes(conn.recv(8), 'big')
         if data_size != 0:
-            data = conn.recv(data_size)
-            data = data.decode('utf-8')
-            data = json.loads(data)
+            data = b''
+            while len(data) < data_size:
+                data += conn.recv(data_size - len(data))
+            data = json.loads(data.decode('utf-8'))
 
             if data["type"] == "join_response":
                 self.join(data)

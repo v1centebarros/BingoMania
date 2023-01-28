@@ -8,13 +8,16 @@ logger = get_logger(__name__)
 
 def send_message(func):
     def wrapper(sock, private_key, *args, **kwargs):
-        # logger.info(f"Sending message {func.__name__}")
+        logger.info(f"Sending message {func.__name__}")
         payload = func(*args, **kwargs)
         payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
         payload = json.dumps(payload).encode('utf-8')
-        message = len(payload).to_bytes(4, 'big') + payload
-        sock.send(message)
+        sent = 0
+        sock.send(len(payload).to_bytes(8, byteorder='big'))
+        while sent < len(payload):
+            sent += sock.send(payload[sent:])
 
+        return json.loads(payload.decode('utf-8'))
     return wrapper
 
 
