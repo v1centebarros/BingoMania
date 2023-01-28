@@ -5,8 +5,9 @@ import selectors
 import socket
 import sys
 from base64 import b64encode, b64decode
+import random
 
-from src.protocol import Protocol
+from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
 from src.utils.Game import Game
 from src.utils.RSA import RSA
@@ -15,11 +16,13 @@ from src.utils.types import Keys, PlayerTuple
 
 
 class Player:
-    def __init__(self, host, port, name):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat):
         self.seq = None
         self.host = host
         self.port = port
         self.name = name
+        self.rsa_cheat = rsa_cheat
+        self.aes_cheat = aes_cheat
         # Start Player's Socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
@@ -86,7 +89,7 @@ class Player:
                 self.logger.info(f"Winner: {data['winner']}")
 
             elif data["type"] == "players_list":
-                self.get_players(data["players"])
+                self.get_players(conn, data)
 
             elif data["type"] == "share_key":
                 self.share_key(data)
@@ -126,14 +129,14 @@ class Player:
         self.deck_size = data["size"]
         card = Game.generate_card(self.deck_size)
         self.logger.info(f"Generated card: {card}")
-        Protocol.send_card(conn, self.private_key, card)
+        Protocol.send_card(conn, self.randomize_private_key(), card)
 
     def shuffle(self, conn, data):
         self.logger.info(f"Shuffling deck")
         self.check_signature(data)
         shuffled_deck = Game.shufle_deck([b64decode(number) for number in data["deck"]])
         shuffled_deck = AES.encrypt_list(self.symmetric_key, shuffled_deck)
-        Protocol.shuffle_response(conn, self.private_key, [b64encode(number).decode() for number in shuffled_deck],
+        Protocol.shuffle_response(conn, self.randomize_private_key(), [b64encode(number).decode() for number in shuffled_deck],
                                   self.seq)
 
     def validate_cards(self, conn, data):
@@ -145,7 +148,7 @@ class Player:
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
         else:
             self.logger.info(f"Valid cards")
-            Protocol.validate_cards_success(conn, self.private_key, data["cards"])
+            Protocol.validate_cards_success(conn, self.randomize_private_key(), data["cards"])
 
     def validate_decks(self, conn, data):
         self.check_signature(data)
@@ -153,9 +156,9 @@ class Player:
         deserialized_symmetric_keys = [b64decode(key) for seq, key in data["symmetric_keys"]]
         deserialized_decks = [[b64decode(number) for number in deck] for seq, deck in data["decks"]]
 
-        for i in range(len(deserialized_decks)-1, 0, -1):
+        for i in range(len(deserialized_decks) - 1, 0, -1):
             next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
-            if set(next_deck).difference(set(deserialized_decks[i-1])):
+            if set(next_deck).difference(set(deserialized_decks[i - 1])):
                 self.logger.info(f"Invalid deck")
                 # TODO send error
         else:
@@ -164,14 +167,14 @@ class Player:
             final_deck = deserialized_decks[-1]
             for symmetric_key in reversed(deserialized_symmetric_keys):
                 final_deck = AES.decrypt_list(symmetric_key, final_deck)
-            Protocol.validate_decks_success(conn, self.private_key, AES.lst_bytes_to_int(final_deck))
+            Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
 
     def choose_winner(self, conn, data):
         self.check_signature(data)
         self.logger.info(f"Choosing winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
-        Protocol.choose_winner_response(conn, self.private_key, winner)
+        Protocol.choose_winner_response(conn, self.randomize_private_key(), winner)
 
     def handle_login_response(self, data):
         if data["status"] == "ok":
@@ -185,21 +188,31 @@ class Player:
         for player in self.players:
             print(f"SEQ: {player.seq}, Nick: {player.nick}")
 
-    def get_players(self, players):
+    def get_players(self, conn, data):
+        self.check_signature(data)
         self.players = []
-        for player in players:
+        for player in data["players"]:
             self.players.append(PlayerTuple(*player))
 
     def check_signature(self, data):
-        signature = data.pop("signature")
-        if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
-            self.logger.info(f"Invalid signature")
-            raise Exception("Invalid signature")
-            # TODO: Make a protocol call to this
-        else:
-            self.logger.info(f"Valid signature")
+        try:
+            signature = data.pop("signature")
+            if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
+                self.logger.info(f"Invalid signature")
+                raise InvalidSignatureException()
+            else:
+                self.logger.info(f"Valid signature")
+        except InvalidSignatureException:
+            Protocol.invalid_signature(self.sock, self.private_key, self.seq)
 
     def share_key(self, data):
         self.check_signature(data)
         self.logger.info(f"Sharing key")
-        Protocol.share_key_response(self.sock, self.private_key, b64encode(self.symmetric_key).decode(), self.seq)
+        Protocol.share_key_response(self.sock, self.randomize_private_key(), b64encode(self.symmetric_key).decode(), self.seq)
+
+    def randomize_private_key(self):
+        if random.randint(0, 100) > self.rsa_cheat:
+            return self.private_key
+        else:
+            self.logger.info(f"CHEATING: Using random private key")
+            return RSA.generate_key_pair()[0]

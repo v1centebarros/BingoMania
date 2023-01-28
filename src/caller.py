@@ -1,12 +1,13 @@
 import fcntl
 import json
 import os
+import random
 import selectors
 import socket
 import sys
 from base64 import b64encode, b64decode
 
-from src.protocol import Protocol
+from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
 from src.utils.Game import Game
 from src.utils.RSA import RSA
@@ -17,10 +18,12 @@ DEFAULT_SIZE = 100
 
 class Caller:
 
-    def __init__(self, host, port, name):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat):
         self.host = host
         self.port = port
         self.name = name
+        self.rsa_cheat = rsa_cheat
+        self.aes_cheat = aes_cheat
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.sock, selectors.EVENT_READ, self.read)
@@ -97,13 +100,15 @@ class Caller:
                 for player in data["players_not_validated"]:
                     self.logger.info(f"Player {player[2]} not Signed")
                     # FIXME: Signature is fucking things up
-                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]}, need_signature=False)
+                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]},
+                                          need_signature=False)
 
         else:
             self.logger.info(f"A caller already exists")
             self.close()
 
     def validate_cards(self, conn, data):
+        self.check_signature(data)
         for card in data["cards"]:
             self.logger.info(f"Validating {card}'s card")
             if not Game.validate_card(DEFAULT_SIZE, card):
@@ -111,7 +116,7 @@ class Caller:
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
         else:
             self.logger.info(f"Valid cards")
-            Protocol.validate_cards_success(conn, self.private_key, data["cards"])
+            Protocol.validate_cards_success(conn, self.randomize_private_key(), data["cards"])
 
     def keyboard_input(self, stdin):
         input_msg = stdin.read()
@@ -129,7 +134,7 @@ class Caller:
         deck = Game.generate_deck(DEFAULT_SIZE)
         self.logger.info(f"Caller's deck: {deck}")
         deck = AES.encrypt_list(self.symmetric_key, AES.lst_int_to_bytes(deck))
-        Protocol.generate_deck_response(self.sock, self.private_key, [b64encode(number).decode() for number in deck])
+        Protocol.generate_deck_response(self.sock, self.randomize_private_key(), [b64encode(number).decode() for number in deck])
 
     def validate_decks(self, conn, data):
         self.check_signature(data)
@@ -137,9 +142,9 @@ class Caller:
         deserialized_symmetric_keys = [b64decode(key) for seq, key in data["symmetric_keys"]]
         deserialized_decks = [[b64decode(number) for number in deck] for seq, deck in data["decks"]]
 
-        for i in range(len(deserialized_decks)-1, 0, -1):
+        for i in range(len(deserialized_decks) - 1, 0, -1):
             next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
-            if set(next_deck).difference(set(deserialized_decks[i-1])):
+            if set(next_deck).difference(set(deserialized_decks[i - 1])):
                 self.logger.info(f"Invalid deck")
                 # TODO send error
         else:
@@ -148,14 +153,14 @@ class Caller:
             final_deck = deserialized_decks[-1]
             for symmetric_key in reversed(deserialized_symmetric_keys):
                 final_deck = AES.decrypt_list(symmetric_key, final_deck)
-            Protocol.validate_decks_success(conn, self.private_key, AES.lst_bytes_to_int(final_deck))
+            Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
 
     def choose_winner(self, conn, data):
         self.check_signature(data)
         self.logger.info(f"Choose winner")
         winner = Game.winner(data["deck"], data["cards"])
         self.logger.info(f"I decided that the winner is {winner}")
-        Protocol.choose_winner_response(conn, self.private_key, winner)
+        Protocol.choose_winner_response(conn, self.randomize_private_key(), winner)
 
     def sign_player_data(self, conn, data, need_signature=True):
         if need_signature:
@@ -163,19 +168,28 @@ class Caller:
             self.check_signature(data)
 
         self.logger.info(f"Signing player data")
-        signed_player_data = RSA.sign(self.private_key, data["player"])
-        Protocol.sign_player_data_response(conn, self.private_key, signed_player_data, data["player"])
+        signed_player_data = RSA.sign(self.randomize_private_key(), data["player"])
+        Protocol.sign_player_data_response(conn, self.randomize_private_key(), signed_player_data, data["player"])
 
     def check_signature(self, data):
-        signature = data.pop("signature")
-        if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
-            self.logger.info(f"Invalid signature")
-            raise Exception("Invalid signature")
-            # TODO: Make a protocol call to this
-        else:
-            self.logger.info(f"Valid signature")
+        try:
+            signature = data.pop("signature")
+            if not RSA.verify_signature(self.playing_area_public_key, signature, json.dumps(data).encode('utf-8')):
+                self.logger.info(f"Invalid signature")
+                raise InvalidSignatureException()
+            else:
+                self.logger.info(f"Valid signature")
+        except InvalidSignatureException:
+            Protocol.invalid_signature(self.sock, self.private_key)
 
     def share_key(self, conn, data):
         self.logger.info(f"Sharing key")
         self.check_signature(data)
         Protocol.share_key_response(conn, self.private_key, b64encode(self.symmetric_key).decode(), 0)
+
+    def randomize_private_key(self):
+        if random.randint(0, 100) > self.rsa_cheat:
+            return self.private_key
+        else:
+            self.logger.info(f"CHEATING: Using random private key")
+            return RSA.generate_key_pair()[0]

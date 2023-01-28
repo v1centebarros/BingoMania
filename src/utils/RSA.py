@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 
 class RSA:
     @staticmethod
-    def serialize_public_key(public_key):
+    def __serialize_public_key(public_key):
         """
         Serialize a public key.
         :param public_key: the public key to serialize
@@ -19,7 +19,7 @@ class RSA:
         ).decode('utf-8')
 
     @staticmethod
-    def deserialize_public_key(public_key):
+    def __deserialize_public_key(public_key):
         """
         Deserialize a public key.
         :param public_key: the public key to deserialize
@@ -44,7 +44,7 @@ class RSA:
         )
         public_key = private_key.public_key()
 
-        public_key = RSA.serialize_public_key(public_key)
+        public_key = RSA.__serialize_public_key(public_key)
 
         return private_key, public_key
 
@@ -62,7 +62,7 @@ class RSA:
         :param message: the message to encrypt
         :return: the encrypted message
         """
-        public_key = RSA.deserialize_public_key(public_key)
+        public_key = RSA.__deserialize_public_key(public_key)
         return public_key.encrypt(
             message,
             padding.OAEP(
@@ -121,7 +121,7 @@ class RSA:
 
         message = message.__repr__().encode('utf-8')
         signature = bytes.fromhex(signature)
-        public_key = RSA.deserialize_public_key(public_key)
+        public_key = RSA.__deserialize_public_key(public_key)
         message_encrypt = RSA.encrypt(message)
         try:
             public_key.verify(

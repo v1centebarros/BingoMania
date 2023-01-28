@@ -249,3 +249,21 @@ class Protocol:
             "symmetric_key": symmetric_key,
             "seq": seq
         }
+
+    @staticmethod
+    @send_message
+    def invalid_signature(seq):
+        return {
+            "type": "invalid_signature",
+            "seq": seq
+        }
+
+
+class InvalidSignatureException(Exception):
+    def __init__(self):
+        super().__init__("Invalid signature")
+
+
+class PlayerNotFoundException(Exception):
+    def __init__(self):
+        super().__init__("Player not found")

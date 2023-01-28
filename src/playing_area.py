@@ -1,10 +1,11 @@
+from datetime import datetime
 import json
 import selectors
 import socket
 from base64 import b64encode, b64decode
 from collections import defaultdict
 
-from src.protocol import Protocol
+from src.protocol import Protocol, InvalidSignatureException, PlayerNotFoundException
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
 from src.utils.status import GameStatus
@@ -33,6 +34,7 @@ class PlayingArea:
         self.winner_choices = []
         self.logger.info(f"Playing Area started")
         self.private_key, self.public_key = RSA.generate_key_pair()
+        self.audit_log = []
 
     def accept(self, sock):
         conn, addr = sock.accept()
@@ -97,6 +99,8 @@ class PlayingArea:
 
             elif data["type"] == "share_key_response":
                 self.handle_share_key_response(conn, data)
+            elif data["type"] == "invalid_signature":
+                self.handle_invalid_signature(conn, data)
         else:
             self.handle_disconnect(conn)
 
@@ -250,14 +254,22 @@ class PlayingArea:
             Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
 
     def check_signature(self, conn, data):
-        public_key = self.find_public_key(conn)
-        signature = data.pop("signature")
-        if not RSA.verify_signature(public_key, signature, json.dumps(data).encode('utf-8')):
-            self.logger.info(f"Invalid signature")
-            raise Exception("Invalid signature")
-            # TODO: Make a protocol call to this
-        else:
-            self.logger.info(f"Valid signature")
+        try:
+
+            public_key = self.find_public_key(conn)
+            signature = data.pop("signature")
+            if not RSA.verify_signature(public_key, signature, json.dumps(data).encode('utf-8')):
+                self.logger.info(f"Invalid signature")
+                raise InvalidSignatureException()
+            else:
+                self.logger.info(f"Valid signature")
+        except InvalidSignatureException:
+            if conn == self.caller.sock:
+                cheater = "caller"
+            else:
+                cheater = next(filter(lambda p: p.sock == conn, self.players), None).nick
+            self.logger.info(f"Invalid signature from {cheater} the game has been compromised")
+            self.close()
 
     def find_public_key(self, sock):
         if sock == self.caller.sock:
@@ -267,7 +279,7 @@ class PlayingArea:
             if player:
                 return player.public_key
             else:
-                raise Exception("Player not found")
+                raise PlayerNotFoundException()
 
     def handle_share_key_response(self, conn, data):
 
@@ -280,9 +292,17 @@ class PlayingArea:
                 self.logger.info(f"Player {player.seq} symmetric key received")
                 player.symmetric_key = b64decode(data["symmetric_key"])
             else:
-                raise Exception("Player not found")
+                raise PlayerNotFoundException()
 
         # check if symmetric_key is not None for all players and caller
         if all([p.symmetric_key for p in self.players]) and self.caller.symmetric_key:
             self.logger.info(f"All symmetric keys received")
             self.request_decks_validation()
+
+    def handle_invalid_signature(self, conn, data):
+        self.logger.info(f"The player {data['seq']} detected a signature error the game has been compromised")
+        Protocol.playing_area_closing(self.caller.sock, self.private_key)
+        for player in self.players:
+            Protocol.playing_area_closing(player.sock, self.private_key)
+        self.close()
+
