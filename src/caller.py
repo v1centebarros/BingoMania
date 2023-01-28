@@ -12,6 +12,7 @@ from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
 from src.utils.Game import Game
 from src.utils.RSA import RSA
+from src.utils.Auth import CC
 from src.utils.logger import get_logger
 
 DEFAULT_SIZE = 100
@@ -19,7 +20,7 @@ DEFAULT_SIZE = 100
 
 class Caller:
 
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, pin):
         self.host = host
         self.port = port
         self.name = name
@@ -33,11 +34,14 @@ class Caller:
         self.private_key, self.public_key = RSA.generate_key_pair()
         self.playing_area_public_key = None
         self.symmetric_key = AES.generate_key()
+        self.citizen_card = CC(pin)
 
         try:
             self.sock.connect((self.host, self.port))
             # Ask server to join
-            Protocol.join_caller_request(self.sock, self.private_key, self.name, self.public_key)
+            cert = self.citizen_card.get_cc_cert()
+            public_key_cc = self.citizen_card.get_cc_public_key()
+            Protocol.join_caller_request(self.sock, self.citizen_card.sign_message, self.name, self.public_key, cert, public_key_cc)
         except ConnectionRefusedError:
             self.logger.info("Connection refused")
             self.close()

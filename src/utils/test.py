@@ -121,7 +121,7 @@ def test_cc_sign(pin):
 def test_cc(pin):
     test_cc_info(pin)
     test_cc_sign(pin)
-    test_cc_valid(pin) 
+    test_cc_valid(pin)  # FUnciona apenas em SMART CARDS
 
 
 

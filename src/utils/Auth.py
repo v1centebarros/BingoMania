@@ -38,7 +38,7 @@ class CC:
         cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
         session.logout()
         session.closeSession()
-        return cert_pem
+        return cert_pem.hex()
 
         
     def get_cc_public_key(self):
@@ -55,7 +55,7 @@ class CC:
         cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
         session.logout()
         session.closeSession()
-        return cert_pem
+        return cert_pem.hex()
 
     def sign_message(self, message):
         """
@@ -72,7 +72,7 @@ class CC:
         signature = bytes(session.sign(key = objs, data = message, mecha = mechanism))
         session.logout()
         session.closeSession()
-        return base64.b64encode(signature)
+        return signature.hex()
 
     def verify_signature(self, message, signature, public_key):
         """ 
@@ -86,7 +86,8 @@ class CC:
         md.update(message)
         message_hash = md.finalize()
 
-        signature = base64.b64decode(signature)
+        signature = bytes.fromhex(signature)
+        public_key = bytes.fromhex(public_key)
         public_key = serialization.load_pem_public_key(public_key)
 
         try:
@@ -120,6 +121,7 @@ def get_name_and_number(cert_data):
     :param cert_data: certificate data
     :return: name and citizen number
     """
+    cert_data = bytes.fromhex(cert_data)
     cert = x509.load_pem_x509_certificate(cert_data, db())
     name = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
     citizen_number = cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
@@ -131,6 +133,7 @@ def get_country(cert_data):
     :param cert_data: certificate data
     :return: country
     """
+    cert_data = bytes.fromhex(cert_data)
     cert = x509.load_pem_x509_certificate(cert_data, db())
     country = cert.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)[0].value
     return country
@@ -154,7 +157,8 @@ def validate_certificate(certificate):
     :param certificate: certificate data
     :return: True if valid, False otherwise
     """
-    cert = x509.load_pem_x509_certificate(certificate)
+    cert = bytes.fromhex(certificate)
+    cert = x509.load_pem_x509_certificate(cert)
     if get_country(certificate) != "PT":
         return False
 

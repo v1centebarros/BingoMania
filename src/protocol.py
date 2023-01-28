@@ -10,7 +10,11 @@ def send_message(func):
     def wrapper(sock, private_key, *args, **kwargs):
         logger.info(f"Sending message {func.__name__}")
         payload = func(*args, **kwargs)
-        payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
+        
+        if callable(private_key):
+            payload["signature"] = private_key(json.dumps(payload).encode('utf-8'))
+        else:
+            payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
         payload = json.dumps(payload).encode('utf-8')
         sent = 0
         sock.send(len(payload).to_bytes(8, byteorder='big'))
@@ -30,11 +34,13 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_caller_request(name, public_key):
+    def join_caller_request(name, public_key,cert,public_key_cc):
         return {
             "type": "join_caller",
             "name": name,
-            "public_key": public_key
+            "public_key": public_key,
+            "cert":cert,
+            "cc_key": public_key_cc
         }
 
     @staticmethod

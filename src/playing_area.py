@@ -5,6 +5,13 @@ from base64 import b64encode, b64decode
 from collections import defaultdict
 from datetime import datetime
 
+import os
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend as db
+from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
+from cryptography.hazmat.primitives.hashes import SHA1, Hash
+from cryptography.hazmat.primitives import hashes, serialization
+
 from src.protocol import Protocol, InvalidSignatureException, PlayerNotFoundException
 from src.utils.RSA import RSA
 from src.utils.logger import get_logger
@@ -151,6 +158,12 @@ class PlayingArea:
             self.write_log(-1, msg)
 
     def join_caller(self, conn: socket.socket, data: dict):
+        self.check_signature(conn, data, data["cc_key"])
+        if not self.validate_certificate(data["cert"]):
+            #! TODO : MENSAGEM ERRO (?)
+            print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
+            pass
+
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
             self.caller = CallerType(seq=0, nick=data["name"], sock=conn, public_key=data["public_key"])
@@ -291,10 +304,114 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
             self.write_log(-1, msg)
+            
+    def load_local_certs(self):
+        """
+        Load local SSL certificates
+        :return: List of local SSL certificates
+        """
+        local_certs = []
+        for entry in os.scandir("/etc/ssl/certs"):
+            if entry.is_file():
+                with open(entry.path, "rb") as f:
+                    cert = x509.load_pem_x509_certificate(f.read())
+                    local_certs.append(cert)
+        return local_certs
 
-    def check_signature(self, conn, data):
+    def validate_certificate(self,certificate):
+        """
+        Validate certificate chain
+        :param certificate: certificate data
+        :return: True if valid, False otherwise
+        """
+        cert = bytes.fromhex(certificate)
+        cert = x509.load_pem_x509_certificate(cert)
+        if self.get_country(certificate) != "PT":
+            return False
+
+        local_certs = self.load_local_certs()
+        while cert.issuer != cert.subject:
+            for local_cert in local_certs:
+                if cert.issuer == local_cert.subject and self.valid_date(local_cert):
+                    cert = local_cert
+                    break
+            else:
+                return False
+        return True
+
+    def valid_date(self, cert)->bool:
+        """
+        Check if certificate is within valid date range
+        :param cert: certificate
+        :return: True if valid, False otherwise
+        """
+        current_date = datetime.now()
+        valid_from = cert.not_valid_before
+        valid_to = cert.not_valid_after
+        return valid_from <= current_date <= valid_to
+
+    def get_country(self, cert_data):
+        """
+        Get country from certificate
+        :param cert_data: certificate data
+        :return: country
+        """
+        cert_data = bytes.fromhex(cert_data)
+        cert = x509.load_pem_x509_certificate(cert_data, db())
+        country = cert.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)[0].value
+        return country
+
+    def verify_signature(self, message, signature, public_key):
+        """ 
+        Verify signature with public key
+        :param message: message to verify
+        :param signature: signature to verify
+        :param public_key: public key to verify
+        :return: True if signature is valid, False otherwise
+        """
+        md = Hash(SHA1(), backend=db())
+        md.update(message)
+        message_hash = md.finalize()
+
+        signature = bytes.fromhex(signature)
+        public_key = bytes.fromhex(public_key)
+        public_key = serialization.load_pem_public_key(public_key)
+
         try:
+            public_key.verify(
+                signature,
+                message_hash,
+                PKCS1v15(),
+                SHA1()
+            )
+            return True
+        except :
+            pass
 
+        try:
+            public_key.verify(
+                signature,
+                message,
+                PKCS1v15(),
+                SHA1()
+            )
+            return True
+        except:
+            return False
+
+    def check_signature(self, conn, data, public_key=None):
+        if public_key:
+            signature = data.pop("signature")
+            # ! TODO : NÃO APARECE NO LOG 
+            if not self.verify_signature(json.dumps(data).encode('utf-8'), signature, public_key):
+                # ! TODO: SUBSTIRUIR (?) POR NICK DO JOGADOR
+                self.logger.info(f"Invalid signature from (?) the game has been compromised")
+                self.close()
+            else:
+                self.logger.info(f"Valid signature")
+            return 
+
+        try:
             public_key = self.find_public_key(conn)
             signature = data.pop("signature")
             if not RSA.verify_signature(public_key, signature, json.dumps(data).encode('utf-8')):
