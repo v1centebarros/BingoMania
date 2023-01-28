@@ -118,7 +118,7 @@ class PlayingArea:
                     Protocol.playing_area_closing(player.sock)
         else:
             self.logger.info(f"Player disconnected")
-            self.players = [player for player in self.players if player.sock != conn]
+            self.players = list(filter(lambda x: x.sock != conn, self.players))
             self.update_players_list()
         conn.close()
 

@@ -1,16 +1,9 @@
 import random
 
-CHEATING_PROB = 0
-
-
 class Game:
 
     @staticmethod
     def generate_card(n) -> list[int]:
-        if random.randint(0, 100) < CHEATING_PROB:
-            print("CHEATING GENERATING CARD")
-            n = random.randint(1, 1000)
-
         return random.sample(range(1, n + 1), n // 4)
 
     @staticmethod
@@ -35,10 +28,6 @@ class Game:
     @staticmethod
     def return_winner(players: list[tuple[int, int]]) -> int:
         """Return the name of the player with the least number of turns."""
-        if random.randint(0, 100) < CHEATING_PROB:
-            print("CHEATING RETURNING WINNER")
-            return random.choice(players)[0]
-
         return min(players, key=lambda x: x[1])[0]
 
     @staticmethod

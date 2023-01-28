@@ -18,12 +18,13 @@ DEFAULT_SIZE = 100
 
 class Caller:
 
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat):
         self.host = host
         self.port = port
         self.name = name
         self.rsa_cheat = rsa_cheat
         self.aes_cheat = aes_cheat
+        self.winner_cheat = winner_cheat
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
         self.sel.register(self.sock, selectors.EVENT_READ, self.read)
@@ -85,7 +86,6 @@ class Caller:
                 self.logger.info(f"Winner: {data['winner']}")
             elif data["type"] == "winner_decision_failed":
                 self.logger.info(f"Winner decision failed")
-                self.close()
             else:
                 self.logger.info(f"Unknown message type: {data['type']}")
         else:
@@ -99,10 +99,7 @@ class Caller:
             if data["players_not_validated"]:
                 for player in data["players_not_validated"]:
                     self.logger.info(f"Player {player[2]} not Signed")
-                    # FIXME: Signature is fucking things up
-                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]},
-                                          need_signature=False)
-
+                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]},need_signature=False)
         else:
             self.logger.info(f"A caller already exists")
             self.close()
@@ -158,7 +155,12 @@ class Caller:
     def choose_winner(self, conn, data):
         self.check_signature(data)
         self.logger.info(f"Choose winner")
-        winner = Game.winner(data["deck"], data["cards"])
+
+        if random.randint(0, 100) > self.winner_cheat:
+            winner = Game.winner(data["deck"], data["cards"])
+        else:
+            self.logger.info(f"CHEATING Winner Choice")
+            winner = random.choice(list(data["cards"].keys()))
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.randomize_private_key(), winner)
 

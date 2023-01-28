@@ -16,13 +16,14 @@ from src.utils.types import Keys, PlayerTuple
 
 
 class Player:
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat):
         self.seq = None
         self.host = host
         self.port = port
         self.name = name
         self.rsa_cheat = rsa_cheat
         self.aes_cheat = aes_cheat
+        self.winner_cheat = winner_cheat
         # Start Player's Socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
@@ -87,15 +88,12 @@ class Player:
                 self.choose_winner(conn, data)
             elif data["type"] == "announce_winner":
                 self.logger.info(f"Winner: {data['winner']}")
-
             elif data["type"] == "players_list":
                 self.get_players(conn, data)
-
             elif data["type"] == "share_key":
                 self.share_key(data)
             elif data["type"] == "winner_decision_failed":
                 self.logger.info(f"Winner decision failed")
-                self.close()
             else:
                 self.logger.info(f"Unknown message type: {data['type']}")
 
@@ -172,7 +170,12 @@ class Player:
     def choose_winner(self, conn, data):
         self.check_signature(data)
         self.logger.info(f"Choosing winner")
-        winner = Game.winner(data["deck"], data["cards"])
+        if random.randint(0, 100) > self.winner_cheat:
+            winner = Game.winner(data["deck"], data["cards"])
+        else:
+            self.logger.info(f"CHEATING Winner Choice")
+            # winner = random.choice(list(data["cards"].keys()))
+            winner = self.name
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.randomize_private_key(), winner)
 
