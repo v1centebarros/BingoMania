@@ -1,10 +1,14 @@
 import json
 
 from src.utils.RSA import RSA
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def send_message(func):
     def wrapper(sock, private_key, *args, **kwargs):
+        logger.info(f"Sending message {func.__name__}")
         payload = func(*args, **kwargs)
         payload["signature"] = RSA.sign(private_key, json.dumps(payload).encode('utf-8'))
         payload = json.dumps(payload).encode('utf-8')

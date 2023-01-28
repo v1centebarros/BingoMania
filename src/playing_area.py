@@ -229,11 +229,13 @@ class PlayingArea:
 
     def publish_data(self, conn, data):
         self.logger.info(f"Sending Data to be Signed by the caller")
+
+        player = next(filter(lambda p: p.seq == data["id"], self.players), None)
+        if player:
+            player.public_key = data["public_key"]
+
         if self.caller:
-            player = next(filter(lambda p: p.seq == data["id"], self.players), None)
-            if player:
-                player.public_key = data["public_key"]
-                Protocol.sign_player_data(self.caller.sock, self.private_key, player.to_list())
+            Protocol.sign_player_data(self.caller.sock, self.private_key, player.to_list())
 
     def sign_player_response(self, conn, data):
         self.check_signature(conn, data)

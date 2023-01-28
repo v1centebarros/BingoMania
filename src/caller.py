@@ -97,7 +97,7 @@ class Caller:
                 for player in data["players_not_validated"]:
                     self.logger.info(f"Player {player[2]} not Signed")
                     # FIXME: Signature is fucking things up
-                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]})
+                    self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]}, need_signature=False)
 
         else:
             self.logger.info(f"A caller already exists")
@@ -157,8 +157,11 @@ class Caller:
         self.logger.info(f"I decided that the winner is {winner}")
         Protocol.choose_winner_response(conn, self.private_key, winner)
 
-    def sign_player_data(self, conn, data):
-        self.check_signature(data)
+    def sign_player_data(self, conn, data, need_signature=True):
+        if need_signature:
+            # If the caller receives a list of players the original message is signed a verified in join function
+            self.check_signature(data)
+
         self.logger.info(f"Signing player data")
         signed_player_data = RSA.sign(self.private_key, data["player"])
         Protocol.sign_player_data_response(conn, self.private_key, signed_player_data, data["player"])
