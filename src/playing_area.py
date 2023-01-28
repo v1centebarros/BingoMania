@@ -3,6 +3,7 @@ import selectors
 import socket
 from base64 import b64encode, b64decode
 from collections import defaultdict
+from datetime import datetime
 
 from src.protocol import Protocol, InvalidSignatureException, PlayerNotFoundException
 from src.utils.RSA import RSA
@@ -52,6 +53,7 @@ class PlayingArea:
             data = conn.recv(data_size)
             data = data.decode('utf-8')
             data = json.loads(data)
+            self.write_log(conn, data)
 
             if data["type"] == "join_player":
                 self.join_player(conn, data)
@@ -81,7 +83,7 @@ class PlayingArea:
                 self.caller_deck(conn, data)
 
             elif data["type"] == "validate_decks_error":
-                self.validate_decks_error_handler(conn,data)
+                self.validate_decks_error_handler(conn, data)
 
             elif data["type"] == "shuffle_response":
                 self.handle_shuffle_response(conn, data)
@@ -94,6 +96,9 @@ class PlayingArea:
 
             elif data["type"] == "close_game":
                 self.close()
+
+            elif data["type"] == "send_log":
+                self.send_log_reponse(conn)
 
             elif data["type"] == "share_key_response":
                 self.handle_share_key_response(conn, data)
@@ -194,7 +199,8 @@ class PlayingArea:
             Protocol.shuffle_request(self.players[data["id"]].sock, self.private_key, data["deck"])
 
     def request_decks_validation(self):
-        symmetric_keys = [(0, b64encode(self.caller.symmetric_key).decode())] + [(player.seq, b64encode(player.symmetric_key).decode()) for player in self.players]
+        symmetric_keys = [(0, b64encode(self.caller.symmetric_key).decode())] + [
+            (player.seq, b64encode(player.symmetric_key).decode()) for player in self.players]
         Protocol.validate_decks(self.caller.sock, self.private_key, self.decks, symmetric_keys)
         for player in self.players:
             Protocol.validate_decks(player.sock, self.private_key, self.decks, symmetric_keys)
@@ -322,3 +328,26 @@ class PlayingArea:
             for player in self.players:
                 Protocol.playing_area_closing(player.sock, self.private_key)
 
+    def write_log(self, conn, data):
+        if self.caller and conn == self.caller.sock:
+            seq = 0
+        else:
+            player = next(filter(lambda p: p.sock == conn, self.players), None)
+            # In the beggining of the game the player do not have a seq
+            seq = player.seq if player else None
+
+        if len(self.audit_log) > 0:
+            prev_entry_hashed = hash(self.audit_log[-1])
+        else:
+            prev_entry_hashed = hash("")
+
+        if "signature" in data.keys():
+            signature = data["signature"]
+        else:
+            signature = ""
+        text = {k: v for k, v in data.items() if k != "signature"}
+        timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        self.audit_log.append(f"{seq} {timestamp} {prev_entry_hashed} {text} {signature}")
+
+    def send_log_reponse(self, conn):
+        Protocol.send_log_response(conn, self.private_key, self.audit_log)

@@ -6,6 +6,7 @@ import selectors
 import socket
 import sys
 from base64 import b64encode, b64decode
+from datetime import datetime
 
 from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
@@ -86,6 +87,8 @@ class Caller:
                 self.logger.info(f"Winner: {data['winner']}")
             elif data["type"] == "winner_decision_failed":
                 self.logger.info(f"Winner decision failed")
+            elif data["type"] == "send_log_response":
+                self.generate_log_file(data)
             else:
                 self.logger.info(f"Unknown message type: {data['type']}")
         else:
@@ -125,6 +128,9 @@ class Caller:
 
         elif input_msg.startswith("/end"):
             Protocol.close_game(self.sock, self.private_key)
+        elif input_msg.startswith("/log"):
+            self.logger.info(f"Asking for log")
+            Protocol.send_log(self.sock, self.private_key)
         else:
             print("Invalid command")
 
@@ -211,3 +217,12 @@ class Caller:
         else:
             self.logger.info(f"CHEATING: Using random symmetric key")
             return AES.generate_key()
+
+
+    def generate_log_file(self, data):
+        self.logger.info(f"Log received. Generating file...")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        with open(f"log-{self.name}-{timestamp}.txt", "w") as f:
+            for line in data["audit_log"]:
+                f.write(f"{line}\n")
+        self.logger.info(f"Log saved to file")

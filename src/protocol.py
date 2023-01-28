@@ -267,6 +267,21 @@ class Protocol:
             "nick": nick
         }
 
+    @staticmethod
+    @send_message
+    def send_log():
+        return {
+            "type": "send_log",
+        }
+
+    @staticmethod
+    @send_message
+    def send_log_response(audit_log):
+        return {
+            "type": "send_log_response",
+            "audit_log": audit_log
+        }
+
 
 class InvalidSignatureException(Exception):
     def __init__(self):

@@ -6,6 +6,7 @@ import selectors
 import socket
 import sys
 from base64 import b64encode, b64decode
+from datetime import datetime
 
 from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
@@ -96,6 +97,8 @@ class Player:
                 self.share_key(data)
             elif data["type"] == "winner_decision_failed":
                 self.logger.info(f"Winner decision failed")
+            elif data["type"] == "send_log_response":
+                self.generate_log_file(data)
             else:
                 self.logger.info(f"Unknown message type: {data['type']}")
 
@@ -103,11 +106,20 @@ class Player:
             self.logger.info("Server disconnected")
             self.close()
 
+    def generate_log_file(self, data):
+        self.logger.info(f"Log received. Generating file...")
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        with open(f"log-{self.name}-{timestamp}.txt", "w") as f:
+            for line in data["audit_log"]:
+                f.write(f"{line}\n")
+        self.logger.info(f"Log saved to file")
+
     def keyboard_input(self, stdin):
         input_msg = stdin.read()
 
         if input_msg.startswith("/log"):
-            self.logger.info(f"I want the log!")
+            self.logger.info(f"Asking for log")
+            Protocol.send_log(self.sock, self.private_key)
         elif input_msg.startswith("/players"):
             self.print_players()
         else:
@@ -254,4 +266,5 @@ class Player:
             return AES.generate_key()
 
     def generate_fake_deck(self):
-        return AES.lst_int_to_bytes(self.card +[random.randint(1, self.deck_size) for _ in range(self.deck_size - len(self.card))])
+        return AES.lst_int_to_bytes(
+            self.card + [random.randint(1, self.deck_size) for _ in range(self.deck_size - len(self.card))])
