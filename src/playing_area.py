@@ -146,6 +146,12 @@ class PlayingArea:
         conn.close()
 
     def join_player(self, conn, data):
+        self.check_signature(conn, data, data["cc_key"])
+        if not self.validate_certificate(data["cert"]):
+            #! TODO : MENSAGEM ERRO (?)
+            print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
+            pass
+
         if self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
             self.players.append(PlayerType(seq=len(self.players) + 1, nick=data["name"], sock=conn, public_key=None,

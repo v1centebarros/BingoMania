@@ -39,7 +39,7 @@ class Protocol:
             "type": "join_caller",
             "name": name,
             "public_key": public_key,
-            "cert":cert,
+            "cert": cert,
             "cc_key": public_key_cc
         }
 
@@ -55,10 +55,12 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_request(name):
+    def join_request(name, cert , public_key_cc):
         return {
             "type": "join_player",
-            "name": name
+            "name": name,
+            "cert": cert,
+            "cc_key": public_key_cc
         }
 
     @staticmethod

@@ -12,12 +12,13 @@ from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
 from src.utils.Game import Game
 from src.utils.RSA import RSA
+from src.utils.Auth import CC
 from src.utils.logger import get_logger
 from src.utils.types import Keys, PlayerTuple
 
 
 class Player:
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, deck_cheat, card_cheat):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, deck_cheat, card_cheat, pin):
         self.seq = None
         self.host = host
         self.port = port
@@ -41,11 +42,14 @@ class Player:
         self.symmetric_key = AES.generate_key()
         self.players: list[PlayerTuple] = []
         self.playing_area_public_key = None
+        self.citizen_card = CC(pin)
 
         try:
             self.sock.connect((self.host, self.port))
             # Ask server to join
-            Protocol.join_request(self.sock, self.private_key, self.name)
+            cert = self.citizen_card.get_cc_cert()
+            public_key_cc = self.citizen_card.get_cc_public_key()
+            Protocol.join_request(self.sock, self.citizen_card.sign_message, self.name, cert, public_key_cc)
         except ConnectionRefusedError:
             print('Connection refused')
             self.close()
