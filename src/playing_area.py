@@ -80,6 +80,9 @@ class PlayingArea:
             elif data["type"] == "generate_deck_response":
                 self.caller_deck(conn, data)
 
+            elif data["type"] == "validate_decks_error":
+                self.validate_decks_error_handler(conn,data)
+
             elif data["type"] == "shuffle_response":
                 self.handle_shuffle_response(conn, data)
 
@@ -309,4 +312,13 @@ class PlayingArea:
         for player in self.players:
             Protocol.playing_area_closing(player.sock, self.private_key)
         self.close()
+
+    def validate_decks_error_handler(self, conn, data):
+
+        self.logger.info(f"Player {data['nick']} detected a signature error the game has been compromised")
+        self.validated_decks[conn] = tuple([None])
+        if len(self.validated_decks) == len(self.players):
+            Protocol.playing_area_closing(self.caller.sock, self.private_key)
+            for player in self.players:
+                Protocol.playing_area_closing(player.sock, self.private_key)
 

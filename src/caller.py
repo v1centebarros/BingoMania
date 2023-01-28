@@ -158,7 +158,7 @@ class Caller:
         self.check_signature(data)
         self.logger.info(f"Choose winner")
 
-        if random.randint(0, 100) > self.winner_cheat:
+        if random.randint(1, 100) > self.winner_cheat:
             winner = Game.winner(data["deck"], data["cards"])
         else:
             self.logger.info(f"CHEATING Winner Choice")
@@ -192,7 +192,7 @@ class Caller:
         Protocol.share_key_response(conn, self.private_key, b64encode(self.symmetric_key).decode(), 0)
 
     def randomize_private_key(self):
-        if random.randint(0, 100) > self.rsa_cheat:
+        if random.randint(1, 100) > self.rsa_cheat:
             return self.private_key
         else:
             self.logger.info(f"CHEATING: Using random private key")

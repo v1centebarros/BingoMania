@@ -127,7 +127,7 @@ class Player:
         self.logger.info(f"Game started")
         self.deck_size = data["size"]
 
-        if random.randint(0, 100) > self.card_cheat:
+        if random.randint(1, 100) > self.card_cheat:
             card = Game.generate_card(self.deck_size)
         else:
             self.logger.info(f"CHEATING Card generation")
@@ -139,7 +139,7 @@ class Player:
         self.logger.info(f"Shuffling deck")
         self.check_signature(data)
         shuffled_deck = Game.shufle_deck([b64decode(number) for number in data["deck"]])
-        shuffled_deck = AES.encrypt_list(self.symmetric_key, shuffled_deck)
+        shuffled_deck = AES.encrypt_list(self.randomize_symmetric_key(), shuffled_deck)
         Protocol.shuffle_response(conn, self.randomize_private_key(), [b64encode(number).decode() for number in shuffled_deck],
                                   self.seq)
 
@@ -166,7 +166,8 @@ class Player:
             next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
             if set(next_deck).difference(set(deserialized_decks[i - 1])):
                 self.logger.info(f"Invalid deck")
-                # TODO send error
+                Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
+                break
         else:
             self.logger.info(f"All decks are valid")
             self.logger.info(f"Generating final deck")
@@ -178,7 +179,7 @@ class Player:
     def choose_winner(self, conn, data):
         self.check_signature(data)
         self.logger.info(f"Choosing winner")
-        if random.randint(0, 100) > self.winner_cheat:
+        if random.randint(1, 100) > self.winner_cheat:
             winner = Game.winner(data["deck"], data["cards"])
         else:
             self.logger.info(f"CHEATING Winner Choice")
@@ -222,8 +223,15 @@ class Player:
         Protocol.share_key_response(self.sock, self.randomize_private_key(), b64encode(self.symmetric_key).decode(), self.seq)
 
     def randomize_private_key(self):
-        if random.randint(0, 100) > self.rsa_cheat:
+        if random.randint(1, 100) > self.rsa_cheat:
             return self.private_key
         else:
             self.logger.info(f"CHEATING: Using random private key")
             return RSA.generate_key_pair()[0]
+
+    def randomize_symmetric_key(self):
+        if random.randint(1, 100) > self.aes_cheat:
+            return self.symmetric_key
+        else:
+            self.logger.info(f"CHEATING: Using random symmetric key")
+            return AES.generate_key()
