@@ -26,6 +26,7 @@ class Player:
         self.winner_cheat = winner_cheat
         self.deck_cheat = deck_cheat
         self.card_cheat = card_cheat
+        self.card = None
         # Start Player's Socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
@@ -128,19 +129,26 @@ class Player:
         self.deck_size = data["size"]
 
         if random.randint(1, 100) > self.card_cheat:
-            card = Game.generate_card(self.deck_size)
+            self.card = Game.generate_card(self.deck_size)
         else:
             self.logger.info(f"CHEATING Card generation")
-            card = Game.generate_card(random.randint(0, 1000))
-        self.logger.info(f"Generated card: {card}")
-        Protocol.send_card(conn, self.randomize_private_key(), card)
+            self.card = Game.generate_card(random.randint(0, 1000))
+        self.logger.info(f"Generated card: {self.card}")
+        Protocol.send_card(conn, self.randomize_private_key(), self.card)
 
     def shuffle(self, conn, data):
         self.logger.info(f"Shuffling deck")
         self.check_signature(data)
-        shuffled_deck = Game.shufle_deck([b64decode(number) for number in data["deck"]])
+
+        if random.randint(1, 100) > self.deck_cheat:
+            shuffled_deck = Game.shufle_deck([b64decode(number) for number in data["deck"]])
+        else:
+            self.logger.info(f"CHEATING Deck shuffling")
+            shuffled_deck = self.generate_fake_deck()
+
         shuffled_deck = AES.encrypt_list(self.randomize_symmetric_key(), shuffled_deck)
-        Protocol.shuffle_response(conn, self.randomize_private_key(), [b64encode(number).decode() for number in shuffled_deck],
+        Protocol.shuffle_response(conn, self.randomize_private_key(),
+                                  [b64encode(number).decode() for number in shuffled_deck],
                                   self.seq)
 
     def validate_cards(self, conn, data):
@@ -172,7 +180,8 @@ class Player:
         else:
             #  Check caller's deck
             caller_deck = AES.decrypt_list(deserialized_symmetric_keys[0], deserialized_decks[0])
-            if not all(isinstance(number, int) and number <= self.deck_size for number in AES.lst_bytes_to_int(caller_deck)):
+            if not all(isinstance(number, int) and number <= self.deck_size for number in
+                       AES.lst_bytes_to_int(caller_deck)):
                 self.logger.info(f"Invalid deck")
                 Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
             else:
@@ -227,7 +236,8 @@ class Player:
     def share_key(self, data):
         self.check_signature(data)
         self.logger.info(f"Sharing key")
-        Protocol.share_key_response(self.sock, self.randomize_private_key(), b64encode(self.symmetric_key).decode(), self.seq)
+        Protocol.share_key_response(self.sock, self.randomize_private_key(), b64encode(self.symmetric_key).decode(),
+                                    self.seq)
 
     def randomize_private_key(self):
         if random.randint(1, 100) > self.rsa_cheat:
@@ -242,3 +252,6 @@ class Player:
         else:
             self.logger.info(f"CHEATING: Using random symmetric key")
             return AES.generate_key()
+
+    def generate_fake_deck(self):
+        return AES.lst_int_to_bytes(self.card +[random.randint(1, self.deck_size) for _ in range(self.deck_size - len(self.card))])
