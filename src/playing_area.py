@@ -308,7 +308,6 @@ class PlayingArea:
             else:
                 cheater = next(filter(lambda p: p.sock == conn, self.players), None).nick
             self.logger.info(f"Invalid signature from {cheater} the game has been compromised")
-            self.close()
 
     def find_public_key(self, sock):
         if sock == self.caller.sock:
@@ -345,7 +344,6 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.playing_area_closing(player.sock, self.private_key)
             self.write_log(-1, msg)
-        self.close()
 
     def validate_decks_error_handler(self, conn, data):
 
