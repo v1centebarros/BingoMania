@@ -1,11 +1,11 @@
 import fcntl
 import json
 import os
+import random
 import selectors
 import socket
 import sys
 from base64 import b64encode, b64decode
-import random
 
 from src.protocol import Protocol, InvalidSignatureException
 from src.utils.AES import AES
@@ -162,6 +162,7 @@ class Player:
         deserialized_symmetric_keys = [b64decode(key) for seq, key in data["symmetric_keys"]]
         deserialized_decks = [[b64decode(number) for number in deck] for seq, deck in data["decks"]]
 
+        #  Check Players' decks
         for i in range(len(deserialized_decks) - 1, 0, -1):
             next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
             if set(next_deck).difference(set(deserialized_decks[i - 1])):
@@ -169,12 +170,18 @@ class Player:
                 Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
                 break
         else:
-            self.logger.info(f"All decks are valid")
-            self.logger.info(f"Generating final deck")
-            final_deck = deserialized_decks[-1]
-            for symmetric_key in reversed(deserialized_symmetric_keys):
-                final_deck = AES.decrypt_list(symmetric_key, final_deck)
-            Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
+            #  Check caller's deck
+            caller_deck = AES.decrypt_list(deserialized_symmetric_keys[0], deserialized_decks[0])
+            if not all(isinstance(number, int) and number <= self.deck_size for number in AES.lst_bytes_to_int(caller_deck)):
+                self.logger.info(f"Invalid deck")
+                Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
+            else:
+                self.logger.info(f"All decks are valid")
+                self.logger.info(f"Generating final deck")
+                final_deck = deserialized_decks[-1]
+                for symmetric_key in reversed(deserialized_symmetric_keys):
+                    final_deck = AES.decrypt_list(symmetric_key, final_deck)
+                Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
 
     def choose_winner(self, conn, data):
         self.check_signature(data)

@@ -132,7 +132,7 @@ class Caller:
         self.logger.info(f"Generating deck")
         deck = Game.generate_deck(DEFAULT_SIZE)
         self.logger.info(f"Caller's deck: {deck}")
-        deck = AES.encrypt_list(self.symmetric_key, AES.lst_int_to_bytes(deck))
+        deck = AES.encrypt_list(self.randomize_symmetric_key(), AES.lst_int_to_bytes(deck))
         Protocol.generate_deck_response(self.sock, self.randomize_private_key(), [b64encode(number).decode() for number in deck])
 
     def validate_decks(self, conn, data):
@@ -145,14 +145,21 @@ class Caller:
             next_deck = AES.decrypt_list(deserialized_symmetric_keys[i], deserialized_decks[i])
             if set(next_deck).difference(set(deserialized_decks[i - 1])):
                 self.logger.info(f"Invalid deck")
-                # TODO send error
+                Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
+                break
         else:
-            self.logger.info(f"All decks are valid")
-            self.logger.info(f"Generating final deck")
-            final_deck = deserialized_decks[-1]
-            for symmetric_key in reversed(deserialized_symmetric_keys):
-                final_deck = AES.decrypt_list(symmetric_key, final_deck)
-            Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
+            #  Check caller's deck
+            caller_deck = AES.decrypt_list(deserialized_symmetric_keys[0], deserialized_decks[0])
+            if not all(isinstance(number, int) and number <= DEFAULT_SIZE for number in AES.lst_bytes_to_int(caller_deck)):
+                self.logger.info(f"Invalid deck")
+                Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
+            else:
+                self.logger.info(f"All decks are valid")
+                self.logger.info(f"Generating final deck")
+                final_deck = deserialized_decks[-1]
+                for symmetric_key in reversed(deserialized_symmetric_keys):
+                    final_deck = AES.decrypt_list(symmetric_key, final_deck)
+                Protocol.validate_decks_success(conn, self.randomize_private_key(), AES.lst_bytes_to_int(final_deck))
 
     def choose_winner(self, conn, data):
         self.check_signature(data)
@@ -197,3 +204,10 @@ class Caller:
         else:
             self.logger.info(f"CHEATING: Using random private key")
             return RSA.generate_key_pair()[0]
+
+    def randomize_symmetric_key(self):
+        if random.randint(1, 100) > self.aes_cheat:
+            return self.symmetric_key
+        else:
+            self.logger.info(f"CHEATING: Using random symmetric key")
+            return AES.generate_key()
