@@ -15,15 +15,13 @@ from src.utils.RSA import RSA
 from src.utils.Auth import CC
 from src.utils.logger import get_logger
 
-DEFAULT_SIZE = 100
-
-
 class Caller:
 
-    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, pin):
+    def __init__(self, host, port, name, rsa_cheat, aes_cheat, winner_cheat, pin, card_size):
         self.host = host
         self.port = port
         self.name = name
+        self.card_size = card_size
         self.rsa_cheat = rsa_cheat
         self.aes_cheat = aes_cheat
         self.winner_cheat = winner_cheat
@@ -115,8 +113,8 @@ class Caller:
         self.check_signature(data)
         for player, card in data["cards"].items():
             self.logger.info(f"Validating {player}'s card")
-            print("CARD SIZE", DEFAULT_SIZE)
-            if Game.failed_card_validation(DEFAULT_SIZE, card):
+            print("CARD SIZE", self.card_size)
+            if Game.failed_card_validation(self.card_size, card):
                 self.logger.info(f"Invalid card")
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
                 break
@@ -128,7 +126,7 @@ class Caller:
         input_msg = stdin.read()
 
         if input_msg.startswith("/start"):
-            Protocol.start_game(self.sock, self.private_key, DEFAULT_SIZE)
+            Protocol.start_game(self.sock, self.private_key, self.card_size)
 
         elif input_msg.startswith("/end"):
             Protocol.close_game(self.sock, self.private_key)
@@ -140,7 +138,7 @@ class Caller:
 
     def generate_deck(self):
         self.logger.info(f"Generating deck")
-        deck = Game.generate_deck(DEFAULT_SIZE)
+        deck = Game.generate_deck(self.card_size)
         self.logger.info(f"Caller's deck: {deck}")
         deck = AES.encrypt_list(self.randomize_symmetric_key(), AES.lst_int_to_bytes(deck))
         Protocol.generate_deck_response(self.sock, self.randomize_private_key(), [b64encode(number).decode() for number in deck])
@@ -160,7 +158,7 @@ class Caller:
         else:
             #  Check caller's deck
             caller_deck = AES.decrypt_list(deserialized_symmetric_keys[0], deserialized_decks[0])
-            if not all(isinstance(number, int) and number <= DEFAULT_SIZE for number in AES.lst_bytes_to_int(caller_deck)):
+            if not all(isinstance(number, int) and number <= self.card_size for number in AES.lst_bytes_to_int(caller_deck)):
                 self.logger.info(f"Invalid deck")
                 Protocol.validate_decks_error(conn, self.randomize_private_key(), "Invalid Deck", self.name)
             else:

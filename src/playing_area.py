@@ -1,16 +1,16 @@
 import json
+import os
 import selectors
 import socket
 from base64 import b64encode, b64decode
 from collections import defaultdict
 from datetime import datetime
 
-import os
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend as db
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 from cryptography.hazmat.primitives.hashes import SHA1, Hash
-from cryptography.hazmat.primitives import hashes, serialization
 
 from src.protocol import Protocol, InvalidSignatureException, PlayerNotFoundException
 from src.utils.RSA import RSA
@@ -42,6 +42,7 @@ class PlayingArea:
         self.logger.info(f"Playing Area started")
         self.private_key, self.public_key = RSA.generate_key_pair()
         self.audit_log = []
+        self.player_counter = 0
 
     def accept(self, sock):
         conn, addr = sock.accept()
@@ -148,15 +149,16 @@ class PlayingArea:
     def join_player(self, conn, data):
         self.check_signature(conn, data, data["cc_key"])
         if not self.validate_certificate(data["cert"]):
-            #! TODO : MENSAGEM ERRO (?)
+            # ! TODO : MENSAGEM ERRO (?)
             print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
             pass
 
         if self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
-            self.players.append(PlayerType(seq=len(self.players) + 1, nick=data["name"], sock=conn, public_key=None,
+            player_seq = self.players[-1].seq+1 if len(self.players) > 0 else 1
+            self.players.append(PlayerType(seq=player_seq, nick=data["name"], sock=conn, public_key=None,
                                            caller_signature=None))
-            msg = Protocol.join_response(conn, self.private_key, "ok", len(self.players), self.public_key)
+            msg = Protocol.join_response(conn, self.private_key, "ok", self.give_seq(), self.public_key)
             self.write_log(-1, msg)
         else:
             self.logger.info(f"Game already started")
@@ -166,7 +168,7 @@ class PlayingArea:
     def join_caller(self, conn: socket.socket, data: dict):
         self.check_signature(conn, data, data["cc_key"])
         if not self.validate_certificate(data["cert"]):
-            #! TODO : MENSAGEM ERRO (?)
+            # ! TODO : MENSAGEM ERRO (?)
             print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
             pass
 
@@ -193,9 +195,9 @@ class PlayingArea:
     def receive_card(self, conn, data):
         self.check_signature(conn, data)
         for player in self.players:
-            if player.sock == conn and player.nick not in self.cards.keys():
+            if player.sock == conn and player.seq not in self.cards.keys():
                 self.logger.info(f"Received card from {player.nick}")
-                self.cards[player.nick] = data["card"]
+                self.cards[player.seq] = data["card"]
         else:
             if len(self.cards) == len(self.players):
                 self.logger.info(f"All cards received")
@@ -265,11 +267,13 @@ class PlayingArea:
             self.logger.info(f"All winners chosen")
             if len(set(self.winner_choices)) == 1:
                 self.logger.info(f"All players chose the same winner")
-                self.logger.info(f"Winner is {self.winner_choices[0]}")
-                msg = Protocol.announce_winner(self.caller.sock, self.private_key, self.winner_choices[0])
+                print(type(self.winner_choices[0]))
+                winner_name = next(filter(lambda x: x.seq == int(self.winner_choices[0]), self.players)).nick
+                self.logger.info(f"Winner is {winner_name}")
+                msg = Protocol.announce_winner(self.caller.sock, self.private_key, winner_name)
                 self.write_log(-1, msg)
                 for player in self.players:
-                    msg = Protocol.announce_winner(player.sock, self.private_key, self.winner_choices[0])
+                    msg = Protocol.announce_winner(player.sock, self.private_key, winner_name)
                     self.write_log(-1, msg)
             else:
                 self.logger.info(f"Players chose different winners")
@@ -310,7 +314,7 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
             self.write_log(-1, msg)
-            
+
     def load_local_certs(self):
         """
         Load local SSL certificates
@@ -324,7 +328,7 @@ class PlayingArea:
                     local_certs.append(cert)
         return local_certs
 
-    def validate_certificate(self,certificate):
+    def validate_certificate(self, certificate):
         """
         Validate certificate chain
         :param certificate: certificate data
@@ -345,7 +349,7 @@ class PlayingArea:
                 return False
         return True
 
-    def valid_date(self, cert)->bool:
+    def valid_date(self, cert) -> bool:
         """
         Check if certificate is within valid date range
         :param cert: certificate
@@ -391,7 +395,7 @@ class PlayingArea:
                 SHA1()
             )
             return True
-        except :
+        except:
             pass
 
         try:
@@ -415,7 +419,7 @@ class PlayingArea:
                 self.close()
             else:
                 self.logger.info(f"Valid signature")
-            return 
+            return
 
         try:
             public_key = self.find_public_key(conn)
@@ -444,7 +448,7 @@ class PlayingArea:
                 raise PlayerNotFoundException()
 
     def handle_share_key_response(self, conn, data):
-
+        print(data)
         if data["seq"] == 0:
             self.logger.info(f"Caller symmetric key received")
             self.caller.symmetric_key = b64decode(data["symmetric_key"])
@@ -468,7 +472,6 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.playing_area_closing(player.sock, self.private_key)
             self.write_log(-1, msg)
-        
 
     def validate_decks_error_handler(self, conn, data):
 
@@ -507,3 +510,7 @@ class PlayingArea:
     def send_log_reponse(self, conn):
         msg = Protocol.send_log_response(conn, self.private_key, self.audit_log)
         self.write_log(-1, msg)
+
+    def give_seq(self):
+        self.player_counter += 1
+        return self.player_counter
