@@ -168,10 +168,10 @@ class PlayingArea:
 
         elif self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
-            player_seq = self.players[-1].seq+1 if len(self.players) > 0 else 1
+            player_seq = self.give_seq()
             self.players.append(PlayerType(seq=player_seq, nick=data["name"], sock=conn, public_key=None,
                                            caller_signature=None))
-            msg = Protocol.join_response(conn, self.private_key, "ok", self.give_seq(), self.public_key)
+            msg = Protocol.join_response(conn, self.private_key, "ok", player_seq, self.public_key)
             self.write_log(-1, msg)
         else:
             self.logger.info(f"Game already started")
