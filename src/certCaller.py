@@ -12,9 +12,11 @@ def save_cert(cert, path):
 def check_cert(cert):
     files = os.listdir("certs/")
     for filename in files:
-        file = open(filename)
-        print(file)
-        if file == cert:
+        with open(filename,"rb") as f:
+            file_content = f.read()
+            print(file_content)
+        
+        if file_content == cert:
             return True
     return False
 
