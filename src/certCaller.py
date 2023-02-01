@@ -4,14 +4,15 @@ import click
 
 #  GUARDAR O CERTIFICADO DE UM CALLER NUMA Pasta
 def save_cert(cert, path):
-    with open(path, "wb") as f:
-        f.write(cert)
+    file = open(path, "wb")
+    file.write(cert)
+    file.close()
 
 #  VERFICAR SE O CERFICADO ESTA NA PASTA
 
 def check_cert(path):
     return os.path.isfile(path)
-    
+
 @click.command()
 @click.option('--pin', '-p', help='Pin of the cc')
 def main(pin):
