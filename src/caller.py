@@ -105,6 +105,12 @@ class Caller:
                 for player in data["players_not_validated"]:
                     self.logger.info(f"Player {player[2]} not Signed")
                     self.sign_player_data(self.sock, {"player": player, "signature": data["signature"]},need_signature=False)
+        elif data["status"] == "invalid_cert":
+            self.logger.info(f"Invalid Citizen Card")
+            self.close()
+        elif data["status"] == "unauthorized_caller":
+            self.logger.info(f"Unauthorized Caller")
+            self.close()
         else:
             self.logger.info(f"A caller already exists")
             self.close()

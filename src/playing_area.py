@@ -181,12 +181,14 @@ class PlayingArea:
         if not self.validate_certificate(data["cert"]):
             # ! TODO : MENSAGEM ERRO (?)
             print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
-            pass
+            msg = Protocol.join_caller_response(conn, self.private_key, "invalid_cert")
+            self.write_log(-1, msg)
         
         if not self.check_cert_caller(data["cert"]):
             # ! TODO : MENSAGEM ERRO (?)
-            print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
-            pass
+            print("CALLER NÃO AUTORIZADO")
+            msg = Protocol.join_caller_response(conn, self.private_key, "unauthorized_caller")
+            self.write_log(-1, msg)
 
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
