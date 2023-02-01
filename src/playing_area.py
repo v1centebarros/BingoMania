@@ -158,12 +158,14 @@ class PlayingArea:
         return False
 
     def join_player(self, conn, data):
+
         self.check_signature(conn, data, data["cc_key"])
         if not self.validate_certificate(data["cert"]):
-            print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
-            pass
+            self.logger.info(f"Invalid certificate")
+            msg = Protocol.join_response(conn, self.private_key, "invalid_cert")
+            self.write_log(-1, msg)
 
-        if self.game_status == GameStatus.NOT_STARTED:
+        elif self.game_status == GameStatus.NOT_STARTED:
             self.logger.info(f"New player from {data['name']}")
             player_seq = self.players[-1].seq+1 if len(self.players) > 0 else 1
             self.players.append(PlayerType(seq=player_seq, nick=data["name"], sock=conn, public_key=None,
@@ -297,6 +299,8 @@ class PlayingArea:
                 for player in self.players:
                     msg = Protocol.winner_decision_failed(player.sock, self.private_key)
                     self.write_log(-1, msg)
+
+        self.game_status = GameStatus.FINISHED
 
     def close(self):
         self.sel.close()
