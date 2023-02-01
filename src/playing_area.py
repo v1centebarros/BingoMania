@@ -309,6 +309,8 @@ class PlayingArea:
         exit()
 
     def publish_data(self, conn, data):
+        print("="*30)
+        print(data)
         print(self.players)
         self.logger.info(f"Sending Data to be Signed by the caller")
 
