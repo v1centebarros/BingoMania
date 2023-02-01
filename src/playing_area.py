@@ -267,7 +267,6 @@ class PlayingArea:
             self.logger.info(f"All winners chosen")
             if len(set(self.winner_choices)) == 1:
                 self.logger.info(f"All players chose the same winner")
-                print(type(self.winner_choices[0]))
                 winner_name = next(filter(lambda x: x.seq == int(self.winner_choices[0]), self.players)).nick
                 self.logger.info(f"Winner is {winner_name}")
                 msg = Protocol.announce_winner(self.caller.sock, self.private_key, winner_name)

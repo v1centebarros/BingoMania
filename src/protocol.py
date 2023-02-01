@@ -65,7 +65,7 @@ class Protocol:
 
     @staticmethod
     @send_message
-    def join_response(status, _id, playing_area_public_key=None):
+    def join_response(status, _id=None, playing_area_public_key=None):
         return {
             "type": "join_response",
             "status": status,

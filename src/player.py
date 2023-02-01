@@ -172,7 +172,6 @@ class Player:
         self.check_signature(data)
         for player, card in data["cards"].items():
             self.logger.info(f"Validating {player}'s card")
-            print("CARD SIZE: ", self.deck_size)
             if Game.failed_card_validation(self.deck_size, card):
                 self.logger.info(f"Invalid card")
                 Protocol.validate_cards_error(self.sock, self.private_key, "Invalid Card", card)
