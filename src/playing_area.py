@@ -160,7 +160,6 @@ class PlayingArea:
     def join_player(self, conn, data):
         self.check_signature(conn, data, data["cc_key"])
         if not self.validate_certificate(data["cert"]):
-            # ! TODO : MENSAGEM ERRO (?)
             print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
             pass
 
@@ -179,14 +178,12 @@ class PlayingArea:
     def join_caller(self, conn: socket.socket, data: dict):
         self.check_signature(conn, data, data["cc_key"])
         if not self.validate_certificate(data["cert"]):
-            # ! TODO : MENSAGEM ERRO (?)
-            print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
+            self.logger.info(f"Invalid certificate")
             msg = Protocol.join_caller_response(conn, self.private_key, "invalid_cert")
             self.write_log(-1, msg)
         
         if not self.check_cert_caller(data["cert"]):
-            # ! TODO : MENSAGEM ERRO (?)
-            print("CALLER NÃO AUTORIZADO")
+            self.logger.info(f"Caller not authorized")
             msg = Protocol.join_caller_response(conn, self.private_key, "unauthorized_caller")
             self.write_log(-1, msg)
 
