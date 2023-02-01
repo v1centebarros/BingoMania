@@ -190,7 +190,7 @@ class PlayingArea:
             msg = Protocol.join_caller_response(conn, self.private_key, "unauthorized_caller")
             self.write_log(-1, msg)
 
-        if self.caller is None:
+        elif self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
             self.caller = CallerType(seq=0, nick=data["name"], sock=conn, public_key=data["public_key"])
             # Check all the players that need to be validated
