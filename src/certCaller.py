@@ -11,7 +11,8 @@ def save_cert(cert, path):
 
 def check_cert(path):
     return os.path.isfile(path)
-
+    
+@click.command()
 @click.option('--pin', '-p', help='Pin of the cc')
 def main(pin):
     if pin is None:
