@@ -186,6 +186,8 @@ class PlayingArea:
         if not self.check_cert_caller(data["cert"]):
             #! TODO : MENSAGEM ERRO 
             print("Erro, NÃO É UM CALLER")
+        else:
+            print("SUcesso, é um caller")
 
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
