@@ -145,6 +145,16 @@ class PlayingArea:
             self.players = list(filter(lambda x: x.sock != conn, self.players))
             self.update_players_list()
         conn.close()
+    
+    def check_cert_caller(self, cert):
+        files = os.listdir("certs/")
+        for filename in files:
+            with open(filename,"rb") as f:
+                file_content = f.read()
+            
+            if file_content == cert:
+                return True
+        return False
 
     def join_player(self, conn, data):
         self.check_signature(conn, data, data["cc_key"])
@@ -171,6 +181,10 @@ class PlayingArea:
             # ! TODO : MENSAGEM ERRO (?)
             print("ERRO NA VALIDAÇÂO DA CADEIA DE CERTIFICADOS")
             pass
+        
+        if not self.check_cert_caller(data["cert"]):
+            #! TODO : MENSAGEM ERRO 
+            print("Erro, NÃO É UM CALLER")
 
         if self.caller is None:
             self.logger.info(f"New caller from {data['name']}")
