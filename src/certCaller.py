@@ -10,6 +10,7 @@ def save_cert(cert, path):
 #  VERFICAR SE O CERFICADO ESTA NA PASTA
 
 def check_cert(path):
+    
     return os.path.isfile(path)
 
 @click.command()
@@ -20,8 +21,9 @@ def main(pin):
         return
     cc = CC(pin)
     cert = cc.get_cc_cert()
-    save_cert(cert, "certs/caller_cert.pem")
-    print(check_cert("certs/caller_cert.pem"))
+    cert = bytes.fromhex(cert)
+    save_cert(cert, "caller_cert.pem")
+    print(check_cert("caller_cert.pem"))
 
 if __name__ == "__main__":
     main()
