@@ -249,7 +249,8 @@ class PlayingArea:
                 msg = Protocol.share_key(player.sock, self.private_key)
                 self.write_log(-1, msg)
         else:
-            msg = Protocol.shuffle_request(self.players[data["id"]].sock, self.private_key, data["deck"])
+            player = next(filter(lambda x: x.seq == data["id"], self.players), None)
+            msg = Protocol.shuffle_request(player.sock, self.private_key, data["deck"])
             self.write_log(-1, msg)
 
     def request_decks_validation(self):
