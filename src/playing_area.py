@@ -309,6 +309,7 @@ class PlayingArea:
         exit()
 
     def publish_data(self, conn, data):
+        print(self.players)
         self.logger.info(f"Sending Data to be Signed by the caller")
 
         player = next(filter(lambda p: p.seq == data["id"], self.players), None)
