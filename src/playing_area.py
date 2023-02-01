@@ -143,6 +143,7 @@ class PlayingArea:
         else:
             self.logger.info(f"Player disconnected")
             self.players = list(filter(lambda x: x.sock != conn, self.players))
+            print(self.players)
             self.update_players_list()
         conn.close()
     
@@ -335,6 +336,9 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
             self.write_log(-1, msg)
+        msg = Protocol.players_list(self.caller.sock, self.private_key, [p.to_list() for p in self.players])
+        self.write_log(-1, msg)
+
 
     def load_local_certs(self):
         """

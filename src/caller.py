@@ -14,6 +14,7 @@ from src.utils.Game import Game
 from src.utils.RSA import RSA
 from src.utils.Auth import CC
 from src.utils.logger import get_logger
+from src.utils.types import PlayerTuple
 
 class Caller:
 
@@ -91,6 +92,8 @@ class Caller:
                 self.logger.info(f"Winner decision failed")
             elif data["type"] == "send_log_response":
                 self.generate_log_file(data)
+            elif data["type"] == "players_list":
+                self.get_players(conn, data)
             else:
                 self.logger.info(f"Unknown message type: {data['type']}")
         else:
@@ -195,6 +198,12 @@ class Caller:
         self.logger.info(f"Signing player data")
         signed_player_data = RSA.sign(self.randomize_private_key(), data["player"])
         Protocol.sign_player_data_response(conn, self.randomize_private_key(), signed_player_data, data["player"])
+
+    def get_players(self, conn, data):
+        self.check_signature(data)
+        self.players = []
+        for player in data["players"]:
+            self.players.append(PlayerTuple(*player))
 
     def check_signature(self, data):
         try:
