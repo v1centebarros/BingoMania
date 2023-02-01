@@ -4,7 +4,7 @@ import click
 
 #  GUARDAR O CERTIFICADO DE UM CALLER NUMA Pasta
 def save_cert(cert, path):
-    with open(path, "wb+") as f:
+    with open(path, "wb") as f:
         f.write(cert)
 
 #  VERFICAR SE O CERFICADO ESTA NA PASTA
