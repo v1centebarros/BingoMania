@@ -147,7 +147,7 @@ class PlayingArea:
         conn.close()
     
     def check_cert_caller(self, cert):
-        files = os.listdir("certs/")
+        files = os.listdir("../certs/")
         for filename in files:
             with open(filename,"rb") as f:
                 file_content = f.read()
