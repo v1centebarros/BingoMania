@@ -143,7 +143,6 @@ class PlayingArea:
         else:
             self.logger.info(f"Player disconnected")
             self.players = list(filter(lambda x: x.sock != conn, self.players))
-            print(self.players)
             self.update_players_list()
         conn.close()
     
@@ -310,9 +309,6 @@ class PlayingArea:
         exit()
 
     def publish_data(self, conn, data):
-        print("="*30)
-        print(data)
-        print(self.players)
         self.logger.info(f"Sending Data to be Signed by the caller")
 
         player = next(filter(lambda p: p.seq == data["id"], self.players), None)
@@ -336,8 +332,9 @@ class PlayingArea:
         for player in self.players:
             msg = Protocol.players_list(player.sock, self.private_key, [p.to_list() for p in self.players])
             self.write_log(-1, msg)
-        msg = Protocol.players_list(self.caller.sock, self.private_key, [p.to_list() for p in self.players])
-        self.write_log(-1, msg)
+        if self.caller:
+            msg = Protocol.players_list(self.caller.sock, self.private_key, [p.to_list() for p in self.players])
+            self.write_log(-1, msg)
 
 
     def load_local_certs(self):
@@ -473,7 +470,6 @@ class PlayingArea:
                 raise PlayerNotFoundException()
 
     def handle_share_key_response(self, conn, data):
-        print(data)
         if data["seq"] == 0:
             self.logger.info(f"Caller symmetric key received")
             self.caller.symmetric_key = b64decode(data["symmetric_key"])
