@@ -152,6 +152,7 @@ class PlayingArea:
             with open(filename,"rb") as f:
                 file_content = f.read()
             
+            cert = bytes.fromhex(cert)
             if file_content == cert:
                 return True
         return False
